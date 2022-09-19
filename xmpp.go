@@ -89,8 +89,12 @@ func (s *Server) TCPAnswer(conn net.Conn) {
 
 	s.Log.Info(fmt.Sprintf("Accepting TCP connection from: %s", conn.RemoteAddr()))
 
-	state := NewTLSStateMachine()
-	client := &Client{messages: make(chan interface{})}
+	state := NewTLSStateMachine(s.SkipTLS)
+	client := &Client{
+		messages:     make(chan interface{}),
+		domainpart:   s.Domain,
+		resourcepart: "XMPPConn1",
+	}
 	defer close(client.messages)
 
 	clientConnection := NewConn(conn, MessageTypes)

@@ -1,7 +1,9 @@
 package main
 
 import (
-	"github.com/tam7t/xmpp"
+	"log"
+
+	"xmpp"
 
 	"crypto/tls"
 	"flag"
@@ -20,20 +22,23 @@ type Logger struct {
 
 func (l Logger) Info(msg string) (err error) {
 	if l.info {
-		_, err = fmt.Printf("INFO: %s\n", msg)
+		//_, err = fmt.Printf("INFO: %s\n", msg)
+		log.Printf("INFO: %s\n", msg)
 	}
 	return err
 }
 
 func (l Logger) Debug(msg string) (err error) {
 	if l.debug {
-		_, err = fmt.Printf("DEBUG: %s\n", msg)
+		//_, err = fmt.Printf("DEBUG: %s\n", msg)
+		log.Printf("DEBUG: %s\n", msg)
 	}
 	return err
 }
 
 func (l Logger) Error(msg string) (err error) {
-	_, err = fmt.Printf("ERROR: %s\n", msg)
+	//_, err = fmt.Printf("ERROR: %s\n", msg)
+	log.Printf("ERROR: %s\n", msg)
 	return err
 }
 
@@ -47,17 +52,20 @@ type AccountManager struct {
 }
 
 func (a AccountManager) Authenticate(username, password string) (success bool, err error) {
-	a.log.Info("start authenticate")
+	//a.log.Info("start authenticate")
+	log.Println("start authenticate")
 	a.lock.Lock()
 	defer a.lock.Unlock()
 
-	a.log.Info(fmt.Sprintf("authenticate: %s", username))
-
-	if a.Users[username] == password {
-		a.log.Debug("auth success")
+	//a.log.Info(fmt.Sprintf("authenticate: %s", username))
+	log.Printf("authenticate: %s\n", username)
+	if a.Users["krms-server"] == password {
+		//a.log.Debug("auth success")
+		log.Println("auth success")
 		success = true
 	} else {
-		a.log.Debug("auth fail")
+		//a.log.Debug("auth fail")
+		log.Println("auth fail")
 		success = false
 	}
 
@@ -68,7 +76,8 @@ func (a AccountManager) CreateAccount(username, password string) (success bool, 
 	a.lock.Lock()
 	defer a.lock.Unlock()
 
-	a.log.Info(fmt.Sprintf("create account: %s", username))
+	//a.log.Info(fmt.Sprintf("create account: %s", username))
+	log.Printf("create account: %v\n", username)
 
 	if _, err := a.Users[username]; err {
 		success = false
@@ -82,12 +91,27 @@ func (a AccountManager) OnlineRoster(jid string) (online []string, err error) {
 	a.lock.Lock()
 	defer a.lock.Unlock()
 
-	a.log.Info(fmt.Sprintf("retrieving roster: %s", jid))
+	//a.log.Info(fmt.Sprintf("retrieving roster: %s", jid))
+	log.Printf("retrieving roster: %v\n", jid)
 
 	for person := range a.Online {
 		online = append(online, person)
 	}
 	return
+}
+
+// new WIP func for pressence messages
+func (a AccountManager) presenceRoutine(bus <-chan xmpp.Message) {
+	for {
+		message := <-bus
+		a.lock.Lock()
+
+		for _, userChannel := range a.Online {
+			userChannel <- message.Data
+		}
+
+		a.lock.Unlock()
+	}
 }
 
 func (a AccountManager) routeRoutine(bus <-chan xmpp.Message) {
@@ -110,7 +134,8 @@ func (a AccountManager) connectRoutine(bus <-chan xmpp.Connect) {
 	for {
 		message := <-bus
 		a.lock.Lock()
-		a.log.Info(fmt.Sprintf("[am] %s connected", message.Jid))
+		//a.log.Info(fmt.Sprintf("[am] %s connected", message.Jid))
+		log.Printf("[am] %v connected\n", message.Jid)
 		a.Online[message.Jid] = message.Receiver
 		a.lock.Unlock()
 	}
@@ -120,7 +145,8 @@ func (a AccountManager) disconnectRoutine(bus <-chan xmpp.Disconnect) {
 	for {
 		message := <-bus
 		a.lock.Lock()
-		a.log.Info(fmt.Sprintf("[am] %s disconnected", message.Jid))
+		//a.log.Info(fmt.Sprintf("[am] %s disconnected", message.Jid))
+		log.Printf("[am] %v disconnected\n", message.Jid)
 		delete(a.Online, message.Jid)
 		a.lock.Unlock()
 	}
@@ -129,18 +155,28 @@ func (a AccountManager) disconnectRoutine(bus <-chan xmpp.Disconnect) {
 /* Main server loop */
 
 func main() {
-	portPtr := flag.Int("port", 5222, "port number to listen on")
-	debugPtr := flag.Bool("debug", false, "turn on debug logging")
+	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+
+	envPort := 5222
+	envDebug := true
+	envSkipTLS := true
+	envDomian := "localhost"
+	envAdmin := "krms-server"
+	envPass := "test1234"
+
+	portPtr := flag.Int("port", envPort, "port number to listen on")
+	debugPtr := flag.Bool("debug", envDebug, "turn on debug logging")
 	flag.Parse()
 
 	var registered = make(map[string]string)
-	registered["tmurphy"] = "password"
+	registered[envAdmin] = envPass
 
 	var activeUsers = make(map[string]chan<- interface{})
 
 	var l = Logger{info: true, debug: *debugPtr}
 
 	var messagebus = make(chan xmpp.Message)
+	var presencebus = make(chan xmpp.Message)
 	var connectbus = make(chan xmpp.Connect)
 	var disconnectbus = make(chan xmpp.Disconnect)
 
@@ -159,6 +195,7 @@ func main() {
 	}
 
 	xmppServer := &xmpp.Server{
+		SkipTLS:    envSkipTLS,
 		Log:        l,
 		Accounts:   am,
 		ConnectBus: connectbus,
@@ -166,14 +203,17 @@ func main() {
 			&xmpp.DebugExtension{Log: l},
 			&xmpp.NormalMessageExtension{MessageBus: messagebus},
 			&xmpp.RosterExtension{Accounts: am},
+			&xmpp.PresenceExtension{PresenceBus: presencebus},
 		},
 		DisconnectBus: disconnectbus,
-		Domain:        "example.com",
+		Domain:        envDomian,
 		TLSConfig:     &tlsConfig,
 	}
 
-	l.Info("Starting server")
-	l.Info("Listening on localhost:" + fmt.Sprintf("%d", *portPtr))
+	// l.Info("Starting server")
+	log.Println("Starting server")
+	// l.Info("Listening on localhost:" + fmt.Sprintf("%d", *portPtr))
+	log.Printf("Listening on localhost: %v\n", *portPtr)
 
 	// Listen for incoming connections.
 
@@ -187,13 +227,15 @@ func main() {
 	go am.routeRoutine(messagebus)
 	go am.connectRoutine(connectbus)
 	go am.disconnectRoutine(disconnectbus)
+	go am.presenceRoutine(presencebus)
 
 	// Handle each connection.
 	for {
 		conn, err := listener.Accept()
 
 		if err != nil {
-			l.Error(fmt.Sprintf("Could not accept connection: %s", err.Error()))
+			//l.Error(fmt.Sprintf("Could not accept connection: %s", err.Error()))
+			log.Printf("Could not accept connection: %v\n", err.Error())
 			os.Exit(1)
 		}
 

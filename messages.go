@@ -18,6 +18,8 @@ const (
 	NsSession = "urn:ietf:params:xml:ns:xmpp-session"
 	// NsClient jabbet client namespace
 	NsClient = "jabber:client"
+	// NsAuth jabbet auth namespace
+	NsIQAuth = "jabber:iq:auth"
 )
 
 // RFC 3920  C.1  Streams name space
@@ -172,6 +174,10 @@ type RosterRequestItem struct {
 	Group        []string `xml:"group"`
 }
 
+type IQQuery struct {
+	XMLName xml.Name `xml:"jabber:iq:auth query"`
+}
+
 // MessageTypes map of known message types
 var MessageTypes = map[xml.Name]reflect.Type{
 	xml.Name{Space: NsStream, Local: "error"}:    reflect.TypeOf(StreamError{}),
@@ -185,4 +191,5 @@ var MessageTypes = map[xml.Name]reflect.Type{
 	xml.Name{Space: NsClient, Local: "presence"}: reflect.TypeOf(ClientPresence{}),
 	xml.Name{Space: NsClient, Local: "iq"}:       reflect.TypeOf(ClientIQ{}),
 	xml.Name{Space: NsClient, Local: "error"}:    reflect.TypeOf(ClientError{}),
+	xml.Name{Space: NsIQAuth, Local: "query"}:    reflect.TypeOf(IQQuery{}),
 }

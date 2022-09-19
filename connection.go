@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"reflect"
 )
@@ -65,20 +66,34 @@ func (c *Connection) Read(se xml.StartElement) (xml.Name, interface{}, error) {
 func (c *Connection) SendStanza(s interface{}) error {
 	data, err := xml.Marshal(s)
 	if err != nil {
+		log.Printf("SendStanza Marshal err: %v\n", err.Error())
 		return err
 	}
-	_, err = c.Raw.Write(data)
+
+	n, err2 := c.Raw.Write(data)
+	if err2 != nil {
+		log.Printf("SendStanza Write err: %v\n", err2.Error())
+	}
+	log.Printf("SendStanza Write data(%v): %v\n", n, data)
 	return err
 }
 
 // SendRaw sends the string across the connection
 func (c *Connection) SendRaw(s string) error {
-	_, err := c.Raw.Write([]byte(s))
+	n, err := c.Raw.Write([]byte(s))
+	if err != nil {
+		log.Printf("SendRaw Write err: %v\n", err.Error())
+	}
+	log.Printf("SendRaw Write data(%v): %v\n", n, s)
 	return err
 }
 
 // SendRawf formats and sends a string across the connection
 func (c *Connection) SendRawf(format string, a ...interface{}) error {
-	_, err := fmt.Fprintf(c.Raw, format, a...)
+	n, err := fmt.Fprintf(c.Raw, format, a...)
+	if err != nil {
+		log.Printf("SendRawf Write err: %v\n", err.Error())
+	}
+	log.Printf("SendRawf Write data(%v): %v\n", n, a)
 	return err
 }
