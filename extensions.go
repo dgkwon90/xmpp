@@ -49,6 +49,7 @@ func (e *RosterExtension) Process(message interface{}, from *Client) {
 	if ok {
 		log.Printf("query: %v", string(parsed.Query))
 	} else {
+		log.Println("no query")
 		return
 	}
 
@@ -102,6 +103,8 @@ type PresenceExtension struct {
 func (e *PresenceExtension) Process(message interface{}, from *Client) {
 	parsed, ok := message.(*ClientPresence)
 	if ok {
+		log.Printf("presence: %v", parsed)
+		log.Printf("delay: %v", parsed.Delay)
 		// this is how you reply to a message: from.messages <- message
 
 		// types:
@@ -124,5 +127,7 @@ func (e *PresenceExtension) Process(message interface{}, from *Client) {
 		// bus for broadcasting to subscribers/peers
 		// server should alter message
 		e.PresenceBus <- Message{To: parsed.To, Data: message}
+	} else {
+		log.Println("no presence")
 	}
 }

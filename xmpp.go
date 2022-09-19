@@ -8,7 +8,7 @@ package xmpp
 
 import (
 	"crypto/tls"
-	"fmt"
+	"log"
 	"net"
 )
 
@@ -87,7 +87,8 @@ func (s *Server) TCPAnswer(conn net.Conn) {
 	defer conn.Close()
 	var err error
 
-	s.Log.Info(fmt.Sprintf("Accepting TCP connection from: %s", conn.RemoteAddr()))
+	//s.Log.Info(fmt.Sprintf("Accepting TCP connection from: %s", conn.RemoteAddr()))
+	log.Printf("Accepting TCP connection from: %v\n", conn.RemoteAddr())
 
 	state := NewTLSStateMachine(s.SkipTLS)
 	client := &Client{
@@ -101,14 +102,17 @@ func (s *Server) TCPAnswer(conn net.Conn) {
 
 	for {
 		state, clientConnection, err = state.Process(clientConnection, client, s)
-		s.Log.Debug(fmt.Sprintf("[state] %s", state))
+		//s.Log.Debug(fmt.Sprintf("[state] %s", state))
+		log.Printf("[state] %v\n", state)
 
 		if err != nil {
-			s.Log.Error(fmt.Sprintf("[%s] State Error: %s", client.jid, err.Error()))
+			//s.Log.Error(fmt.Sprintf("[%s] State Error: %s", client.jid, err.Error()))
+			log.Printf("[%v] State Error: %v\n", client.jid, err.Error())
 			return
 		}
 		if state == nil {
-			s.Log.Info(fmt.Sprintf("Client Disconnected: %s", client.jid))
+			//s.Log.Info(fmt.Sprintf("Client Disconnected: %s", client.jid))
+			log.Printf("Client Disconnected:  %v\n", client.jid)
 			s.DisconnectBus <- Disconnect{Jid: client.jid}
 			return
 		}

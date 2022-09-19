@@ -36,9 +36,9 @@ func (c *Connection) Next() (xml.StartElement, error) {
 		if err != nil {
 			return xml.StartElement{}, err
 		}
-		switch nextToken.(type) {
+		switch token := nextToken.(type) {
 		case xml.StartElement:
-			return nextToken.(xml.StartElement), nil
+			return token, nil
 		}
 	}
 }
@@ -70,9 +70,10 @@ func (c *Connection) SendStanza(s interface{}) error {
 		return err
 	}
 
-	n, err2 := c.Raw.Write(data)
-	if err2 != nil {
-		log.Printf("SendStanza Write err: %v\n", err2.Error())
+	var n int
+	n, err = c.Raw.Write(data)
+	if err != nil {
+		log.Printf("SendStanza Write err: %v\n", err.Error())
 	}
 	log.Printf("SendStanza Write data(%v): %v\n", n, data)
 	return err

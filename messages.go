@@ -180,16 +180,16 @@ type IQQuery struct {
 
 // MessageTypes map of known message types
 var MessageTypes = map[xml.Name]reflect.Type{
-	xml.Name{Space: NsStream, Local: "error"}:    reflect.TypeOf(StreamError{}),
-	xml.Name{Space: NsTLS, Local: "failure"}:     reflect.TypeOf(tlsFailure{}),
-	xml.Name{Space: NsSASL, Local: "auth"}:       reflect.TypeOf(saslAuth{}),
-	xml.Name{Space: NsSASL, Local: "mechanisms"}: reflect.TypeOf(saslMechanisms{}),
-	xml.Name{Space: NsSASL, Local: "challenge"}:  reflect.TypeOf(""),
-	xml.Name{Space: NsSASL, Local: "response"}:   reflect.TypeOf(""),
-	xml.Name{Space: NsBind, Local: "bind"}:       reflect.TypeOf(bindBind{}),
-	xml.Name{Space: NsClient, Local: "message"}:  reflect.TypeOf(ClientMessage{}),
-	xml.Name{Space: NsClient, Local: "presence"}: reflect.TypeOf(ClientPresence{}),
-	xml.Name{Space: NsClient, Local: "iq"}:       reflect.TypeOf(ClientIQ{}),
-	xml.Name{Space: NsClient, Local: "error"}:    reflect.TypeOf(ClientError{}),
-	xml.Name{Space: NsIQAuth, Local: "query"}:    reflect.TypeOf(IQQuery{}),
+	{Space: NsStream, Local: "error"}:    reflect.TypeOf(StreamError{}),
+	{Space: NsTLS, Local: "failure"}:     reflect.TypeOf(tlsFailure{}),
+	{Space: NsSASL, Local: "auth"}:       reflect.TypeOf(saslAuth{}),
+	{Space: NsSASL, Local: "mechanisms"}: reflect.TypeOf(saslMechanisms{}),
+	{Space: NsSASL, Local: "challenge"}:  reflect.TypeOf(""),
+	{Space: NsSASL, Local: "response"}:   reflect.TypeOf(""),
+	{Space: NsBind, Local: "bind"}:       reflect.TypeOf(bindBind{}),
+	{Space: NsClient, Local: "message"}:  reflect.TypeOf(ClientMessage{}),
+	{Space: NsClient, Local: "presence"}: reflect.TypeOf(ClientPresence{}),
+	{Space: NsClient, Local: "iq"}:       reflect.TypeOf(ClientIQ{}),
+	{Space: NsClient, Local: "error"}:    reflect.TypeOf(ClientError{}),
+	{Space: NsIQAuth, Local: "query"}:    reflect.TypeOf(IQQuery{}),
 }

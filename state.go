@@ -128,7 +128,7 @@ func (state *TLSAuth) Process(c *Connection, client *Client, s *Server) (State, 
 	_, val, err := c.Read(se)
 	if err != nil {
 		//s.Log.Error(errors.New("Unable to read auth stanza").Error())
-		log.Printf("%v\n", errors.New("Unable to read auth stanza").Error())
+		log.Println("Unable to read auth stanza")
 		return nil, c, err
 	}
 	switch v := val.(type) {
@@ -152,7 +152,7 @@ func (state *TLSAuth) Process(c *Connection, client *Client, s *Server) (State, 
 	default:
 		// expected authentication
 		//s.Log.Error(errors.New("Expected authentication").Error())
-		log.Printf("%v\n", errors.New("Expected authentication").Error())
+		log.Println("Expected authentication")
 		return nil, c, err
 	}
 	return state.Next, c, nil
@@ -179,7 +179,7 @@ func (state *Auth) Process(c *Connection, client *Client, s *Server) (State, *Co
 	log.Printf("Auth read full auth stanza: %v\n", se)
 	if err != nil {
 		//s.Log.Error(errors.New("Unable to read auth stanza").Error())
-		log.Printf("%v\n", errors.New("Unable to read auth stanza").Error())
+		log.Println("Unable to read auth stanza")
 		return nil, c, err
 	}
 	switch v := val.(type) {
@@ -204,7 +204,7 @@ func (state *Auth) Process(c *Connection, client *Client, s *Server) (State, *Co
 	default:
 		// expected authentication
 		//s.Log.Error(errors.New("Expected authentication").Error())
-		log.Printf("%v\n", errors.New("Expected authentication").Error())
+		log.Println("Expected authentication")
 		return nil, c, err
 	}
 	return state.Next, c, nil
@@ -263,7 +263,7 @@ func (state *AuthedStream) Process(c *Connection, client *Client, s *Server) (St
 		s.ConnectBus <- Connect{Jid: client.jid, Receiver: client.messages}
 	default:
 		//s.Log.Error(errors.New("Expected ClientIQ message").Error())
-		log.Printf("%v\n", errors.New("Expected ClientIQ message").Error())
+		log.Println("Expected ClientIQ message")
 		return nil, c, err
 	}
 	return state.Next, c, nil
@@ -284,11 +284,19 @@ func (state *Normal) Process(c *Connection, client *Client, s *Server) (State, *
 		for {
 			se, err := c.Next()
 			if err != nil {
+				log.Printf("err: %v\n", err.Error())
 				errors <- err
 				done <- true
 				return
 			}
-			_, val, _ := c.Read(se)
+			log.Printf("start element: %v\n", se)
+
+			name, val, readErr := c.Read(se)
+			if readErr != nil {
+				log.Printf("Read Error: %v\n", err.Error())
+			} else {
+				log.Printf("Read Name[%v]: %v\n", name, val)
+			}
 
 			for _, extension := range s.Extensions {
 				extension.Process(val, client)
@@ -298,12 +306,12 @@ func (state *Normal) Process(c *Connection, client *Client, s *Server) (State, *
 
 	for {
 		select {
-		case msg := <-client.messages:
-			switch msg.(type) {
+		case messages := <-client.messages:
+			switch msg := messages.(type) {
 			default:
 				err = c.SendStanza(msg)
 			case string:
-				err = c.SendRaw(msg.(string))
+				err = c.SendRaw(msg)
 			}
 			if err != nil {
 				errors <- err
