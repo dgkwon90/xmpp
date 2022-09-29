@@ -30,9 +30,10 @@ type AccountManager interface {
 
 // Logging interface for library messages
 type Logging interface {
-	Debug(string) error
-	Info(string) error
-	Error(string) error
+	Debug(format string, args ...interface{})
+	Info(format string, args ...interface{})
+	Waring(format string, args ...interface{})
+	Error(format string, args ...interface{})
 }
 
 // Server contains options for an XMPP connection.
@@ -86,6 +87,11 @@ type Disconnect struct {
 func (s *Server) TCPAnswer(conn net.Conn) {
 	defer conn.Close()
 	var err error
+
+	s.Log.Error("Error LEVEL")
+	s.Log.Waring("Waring LEVEL")
+	s.Log.Info("Info LEVEL")
+	s.Log.Debug("Debug LEVEL")
 
 	//s.Log.Info(fmt.Sprintf("Accepting TCP connection from: %s", conn.RemoteAddr()))
 	log.Printf("Accepting TCP connection from: %v\n", conn.RemoteAddr())

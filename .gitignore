@@ -1,0 +1,27 @@
+### VisualStudioCode ###
+.vscode/*
+.vscode/settings.json
+.vscode/tasks.json
+.vscode/launch.json
+.vscode/extensions.json
+
+### Goland ###
+.idea/*
+
+### Go ###
+*.exe
+*.exe~
+_debug_bin
+__debug_bin
+
+### Etc ###
+debug
+*.log
+*.test
+*.out
+/docs
+
+### custom ###
+logs/*
+/xmpp
+/xmpp.exe

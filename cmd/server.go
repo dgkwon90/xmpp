@@ -13,62 +13,47 @@ import (
 	"sync"
 )
 
-/* Inject logging into xmpp library */
+const selfXMppServerClient = "selfXmppClient"
+const selfXmppServerClientPassword = "test1234"
 
-type Logger struct {
-	info  bool
-	debug bool
-}
-
-func (l Logger) Info(msg string) (err error) {
-	if l.info {
-		//_, err = fmt.Printf("INFO: %s\n", msg)
-		log.Printf("INFO: %s\n", msg)
-	}
-	return err
-}
-
-func (l Logger) Debug(msg string) (err error) {
-	if l.debug {
-		//_, err = fmt.Printf("DEBUG: %s\n", msg)
-		log.Printf("DEBUG: %s\n", msg)
-	}
-	return err
-}
-
-func (l Logger) Error(msg string) (err error) {
-	//_, err = fmt.Printf("ERROR: %s\n", msg)
-	log.Printf("ERROR: %s\n", msg)
-	return err
+type AdminUser struct {
+	Name     string
+	Password string
+	//Commnad  chan<- interface{}
 }
 
 /* Inject account management into xmpp library */
-
 type AccountManager struct {
-	Users  map[string]string
-	Online map[string]chan<- interface{}
-	lock   *sync.Mutex
-	log    Logger
+	AdminUser AdminUser
+	Users     map[string]string
+	Online    map[string]chan<- interface{}
+	lock      *sync.Mutex
+	log       Logger
 }
 
 func (a AccountManager) Authenticate(username, password string) (success bool, err error) {
 	//a.log.Info("start authenticate")
-	log.Println("start authenticate")
-	a.lock.Lock()
-	defer a.lock.Unlock()
+	log.Println("[am] >>>> start authenticate")
 
 	//a.log.Info(fmt.Sprintf("authenticate: %s", username))
-	log.Printf("authenticate: %s\n", username)
-	if a.Users["krms-server"] == password {
-		//a.log.Debug("auth success")
-		log.Println("auth success")
-		success = true
-	} else {
-		//a.log.Debug("auth fail")
-		log.Println("auth fail")
-		success = false
-	}
+	log.Printf("[am] >>>> authenticate: %s\n", username)
 
+	if _, ok := a.Users[username]; ok {
+		//a.lock.Lock()
+		//defer a.lock.Unlock()
+		if a.AdminUser.Password == password {
+			//a.log.Debug("auth success")
+			log.Println("[am] >>>> auth success")
+			success = true
+		} else {
+			//a.log.Debug("auth fail")
+			log.Println("[am] >>>> auth fail")
+			success = false
+		}
+	} else {
+		log.Println("[am] >>>> new username")
+		success, err = a.CreateAccount(username, password)
+	}
 	return
 }
 
@@ -77,12 +62,13 @@ func (a AccountManager) CreateAccount(username, password string) (success bool, 
 	defer a.lock.Unlock()
 
 	//a.log.Info(fmt.Sprintf("create account: %s", username))
-	log.Printf("create account: %v\n", username)
+	log.Printf("[am] >>>> create account: %v\n", username)
 
 	if _, err := a.Users[username]; err {
 		success = false
 	} else {
 		a.Users[username] = password
+		success = true
 	}
 	return
 }
@@ -92,7 +78,7 @@ func (a AccountManager) OnlineRoster(jid string) (online []string, err error) {
 	defer a.lock.Unlock()
 
 	//a.log.Info(fmt.Sprintf("retrieving roster: %s", jid))
-	log.Printf("retrieving roster: %v\n", jid)
+	log.Printf("[am] >>>> retrieving roster: %v\n", jid)
 
 	for person := range a.Online {
 		online = append(online, person)
@@ -153,34 +139,34 @@ func (a AccountManager) disconnectRoutine(bus <-chan xmpp.Disconnect) {
 }
 
 /* Main server loop */
-
 func main() {
-	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+	//log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
 	envPort := 5222
-	envDebug := true
+	logLevel := LOGGER_OFF
 	envSkipTLS := true
 	envDomian := "localhost"
-	envAdmin := "krms-server"
-	envPass := "test1234"
+	envSelfXmppClient := selfXMppServerClient
+	envSelfXmppClientPassword := selfXmppServerClientPassword
 
 	portPtr := flag.Int("port", envPort, "port number to listen on")
-	debugPtr := flag.Bool("debug", envDebug, "turn on debug logging")
+	logLevelPtr := flag.Int("loggerLevel", logLevel, "set level logging")
 	flag.Parse()
 
+	var adminUser = AdminUser{Name: envSelfXmppClient, Password: envSelfXmppClientPassword}
+
 	var registered = make(map[string]string)
-	registered[envAdmin] = envPass
 
 	var activeUsers = make(map[string]chan<- interface{})
 
-	var l = Logger{info: true, debug: *debugPtr}
+	var l = Logger{level: logLevelPtr}
 
 	var messagebus = make(chan xmpp.Message)
 	var presencebus = make(chan xmpp.Message)
 	var connectbus = make(chan xmpp.Connect)
 	var disconnectbus = make(chan xmpp.Disconnect)
 
-	var am = AccountManager{Users: registered, Online: activeUsers, log: l, lock: &sync.Mutex{}}
+	var am = AccountManager{AdminUser: adminUser, Users: registered, Online: activeUsers, log: l, lock: &sync.Mutex{}}
 
 	var cert, _ = tls.LoadX509KeyPair("./cert.pem", "./key.pem")
 	var tlsConfig = tls.Config{
@@ -216,7 +202,6 @@ func main() {
 	log.Printf("Listening on localhost: %v\n", *portPtr)
 
 	// Listen for incoming connections.
-
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", *portPtr))
 	if err != nil {
 		l.Error(fmt.Sprintf("Could not listen for connections: %s", err.Error()))
@@ -239,6 +224,7 @@ func main() {
 			os.Exit(1)
 		}
 
+		//tcp go rountine
 		go xmppServer.TCPAnswer(conn)
 	}
 }

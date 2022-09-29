@@ -257,6 +257,10 @@ func (state *AuthedStream) Process(c *Connection, client *Client, s *Server) (St
 		// 	s.Log.Error(errors.New("Invalid bind request").Error())
 		// 	return nil, c, err
 		// }
+		log.Println("AuthedStream Client localpart(Username)", client.localpart)
+		log.Println("AuthedStream Clientdomainpart", client.domainpart)
+		log.Println("AuthedStream Clientresourcepart", client.resourcepart)
+
 		client.jid = client.localpart + "@" + client.domainpart + "/" + client.resourcepart
 		c.SendRawf("<iq id='%s' type='result'><bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'><jid>%s</jid></bind></iq>", v.ID, client.jid)
 
