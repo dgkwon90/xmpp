@@ -2,8 +2,8 @@ package main
 
 import (
 	"log"
-
-	"xmpp"
+	"xmpp/internal/pkg"
+	"xmpp/internal/server"
 
 	"crypto/tls"
 	"flag"
@@ -27,8 +27,8 @@ type AccountManager struct {
 	AdminUser AdminUser
 	Users     map[string]string
 	Online    map[string]chan<- interface{}
-	lock      *sync.Mutex
-	log       Logger
+	lock *sync.Mutex
+	log  pkg.Logger
 }
 
 func (a AccountManager) Authenticate(username, password string) (success bool, err error) {
@@ -87,7 +87,7 @@ func (a AccountManager) OnlineRoster(jid string) (online []string, err error) {
 }
 
 // new WIP func for pressence messages
-func (a AccountManager) presenceRoutine(bus <-chan xmpp.Message) {
+func (a AccountManager) presenceRoutine(bus <-chan server.Message) {
 	for {
 		message := <-bus
 		a.lock.Lock()
@@ -100,7 +100,7 @@ func (a AccountManager) presenceRoutine(bus <-chan xmpp.Message) {
 	}
 }
 
-func (a AccountManager) routeRoutine(bus <-chan xmpp.Message) {
+func (a AccountManager) routeRoutine(bus <-chan server.Message) {
 	var channel chan<- interface{}
 	var ok bool
 
@@ -116,7 +116,7 @@ func (a AccountManager) routeRoutine(bus <-chan xmpp.Message) {
 	}
 }
 
-func (a AccountManager) connectRoutine(bus <-chan xmpp.Connect) {
+func (a AccountManager) connectRoutine(bus <-chan server.Connect) {
 	for {
 		message := <-bus
 		a.lock.Lock()
@@ -127,7 +127,7 @@ func (a AccountManager) connectRoutine(bus <-chan xmpp.Connect) {
 	}
 }
 
-func (a AccountManager) disconnectRoutine(bus <-chan xmpp.Disconnect) {
+func (a AccountManager) disconnectRoutine(bus <-chan server.Disconnect) {
 	for {
 		message := <-bus
 		a.lock.Lock()
@@ -143,7 +143,7 @@ func main() {
 	//log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
 	envPort := 5222
-	logLevel := LOGGER_OFF
+	logLevel := pkg.LOGGER_OFF
 	envSkipTLS := true
 	envDomian := "localhost"
 	envSelfXmppClient := selfXMppServerClient
@@ -159,12 +159,12 @@ func main() {
 
 	var activeUsers = make(map[string]chan<- interface{})
 
-	var l = Logger{level: logLevelPtr}
+	var l = pkg.Logger{}
 
-	var messagebus = make(chan xmpp.Message)
-	var presencebus = make(chan xmpp.Message)
-	var connectbus = make(chan xmpp.Connect)
-	var disconnectbus = make(chan xmpp.Disconnect)
+	var messagebus = make(chan server.Message)
+	var presencebus = make(chan server.Message)
+	var connectbus = make(chan server.Connect)
+	var disconnectbus = make(chan server.Disconnect)
 
 	var am = AccountManager{AdminUser: adminUser, Users: registered, Online: activeUsers, log: l, lock: &sync.Mutex{}}
 
@@ -180,16 +180,16 @@ func main() {
 			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA},
 	}
 
-	xmppServer := &xmpp.Server{
+	xmppServer := &server.Server{
 		SkipTLS:    envSkipTLS,
 		Log:        l,
 		Accounts:   am,
 		ConnectBus: connectbus,
-		Extensions: []xmpp.Extension{
-			&xmpp.DebugExtension{Log: l},
-			&xmpp.NormalMessageExtension{MessageBus: messagebus},
-			&xmpp.RosterExtension{Accounts: am},
-			&xmpp.PresenceExtension{PresenceBus: presencebus},
+		Extensions: []server.Extension{
+			&server.DebugExtension{Log: l},
+			&server.NormalMessageExtension{MessageBus: messagebus},
+			&server.RosterExtension{Accounts: am},
+			&server.PresenceExtension{PresenceBus: presencebus},
 		},
 		DisconnectBus: disconnectbus,
 		Domain:        envDomian,
