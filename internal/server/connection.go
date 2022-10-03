@@ -1,4 +1,4 @@
-package xmpp
+package server
 
 import (
 	"encoding/xml"
@@ -19,6 +19,7 @@ type Connection struct {
 
 // NewConn creates a Connection struct for a given net.Conn and message system
 func NewConn(raw net.Conn, MessageTypes map[xml.Name]reflect.Type) *Connection {
+	log.Println("[c] NewConn")
 	conn := &Connection{
 		Raw:          raw,
 		MessageTypes: MessageTypes,
@@ -66,16 +67,16 @@ func (c *Connection) Read(se xml.StartElement) (xml.Name, interface{}, error) {
 func (c *Connection) SendStanza(s interface{}) error {
 	data, err := xml.Marshal(s)
 	if err != nil {
-		log.Printf("SendStanza Marshal err: %v\n", err.Error())
+		log.Printf("[c] SendStanza Marshal err: %v\n", err.Error())
 		return err
 	}
 
 	var n int
 	n, err = c.Raw.Write(data)
 	if err != nil {
-		log.Printf("SendStanza Write err: %v\n", err.Error())
+		log.Printf("[c] SendStanza Write err: %v\n", err.Error())
 	}
-	log.Printf("SendStanza Write data(%v): %v\n", n, data)
+	log.Printf("[c] SendStanza Write data(%v): %v\n", n, data)
 	return err
 }
 
@@ -83,9 +84,9 @@ func (c *Connection) SendStanza(s interface{}) error {
 func (c *Connection) SendRaw(s string) error {
 	n, err := c.Raw.Write([]byte(s))
 	if err != nil {
-		log.Printf("SendRaw Write err: %v\n", err.Error())
+		log.Printf("[c] SendRaw Write err: %v\n", err.Error())
 	}
-	log.Printf("SendRaw Write data(%v): %v\n", n, s)
+	log.Printf("[c] SendRaw Write data(%v): %v\n", n, s)
 	return err
 }
 
@@ -93,8 +94,9 @@ func (c *Connection) SendRaw(s string) error {
 func (c *Connection) SendRawf(format string, a ...interface{}) error {
 	n, err := fmt.Fprintf(c.Raw, format, a...)
 	if err != nil {
-		log.Printf("SendRawf Write err: %v\n", err.Error())
+		log.Printf("[c] SendRawf Write err: %v\n", err.Error())
 	}
-	log.Printf("SendRawf Write data(%v): %v\n", n, a)
+	log.Printf("[c] SendRawf Write data(%v): ", n)
+	log.Printf(format+"\n", a)
 	return err
 }

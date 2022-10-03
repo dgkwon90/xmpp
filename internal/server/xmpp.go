@@ -4,7 +4,7 @@
 
 // Package xmpp implements the XMPP IM protocol, as specified in RFC 6120 and
 // 6121.
-package xmpp
+package server
 
 import (
 	"crypto/tls"
@@ -15,16 +15,16 @@ import (
 // Client xmpp connection
 type Client struct {
 	jid          string
-	localpart    string
-	domainpart   string
-	resourcepart string
+	localPart    string
+	domainPart   string
+	resourcePart string
 	messages     chan interface{}
 }
 
 // AccountManager performs roster management and authentication
 type AccountManager interface {
 	Authenticate(username, password string) (success bool, err error)
-	CreateAccount(username, password string) (success bool, err error)
+	//CreateAccount(username, password string) (success bool, err error)
 	OnlineRoster(jid string) (online []string, err error)
 }
 
@@ -85,40 +85,41 @@ type Disconnect struct {
 
 // TCPAnswer sends connection through the TSLStateMachine
 func (s *Server) TCPAnswer(conn net.Conn) {
-	defer conn.Close()
-	var err error
-
-	s.Log.Error("Error LEVEL")
-	s.Log.Waring("Waring LEVEL")
-	s.Log.Info("Info LEVEL")
-	s.Log.Debug("Debug LEVEL")
+	defer func() {
+		closeErr := conn.Close()
+		if closeErr != nil {
+			log.Println("[x][ERROR]:", closeErr)
+		}
+	}()
 
 	//s.Log.Info(fmt.Sprintf("Accepting TCP connection from: %s", conn.RemoteAddr()))
-	log.Printf("Accepting TCP connection from: %v\n", conn.RemoteAddr())
-
+	log.Printf("[x]Accepting TCP connection from: %v\n", conn.RemoteAddr())
+	log.Printf("[x]connection LocalAddr: %v\n", conn.LocalAddr())
 	state := NewTLSStateMachine(s.SkipTLS)
+
+	// create new client
 	client := &Client{
-		messages:     make(chan interface{}),
-		domainpart:   s.Domain,
-		resourcepart: "XMPPConn1",
+		messages: make(chan interface{}),
+		//domainPart:   s.Domain,
+		//resourcePart: "XMPPConn1",
 	}
 	defer close(client.messages)
 
 	clientConnection := NewConn(conn, MessageTypes)
-
 	for {
+		var err error
+		log.Println("\n\n[x]state process >>>")
 		state, clientConnection, err = state.Process(clientConnection, client, s)
 		//s.Log.Debug(fmt.Sprintf("[state] %s", state))
-		log.Printf("[state] %v\n", state)
 
 		if err != nil {
 			//s.Log.Error(fmt.Sprintf("[%s] State Error: %s", client.jid, err.Error()))
-			log.Printf("[%v] State Error: %v\n", client.jid, err.Error())
+			log.Printf("[x][%v] State Error: %v\n", client.jid, err.Error())
 			return
 		}
 		if state == nil {
 			//s.Log.Info(fmt.Sprintf("Client Disconnected: %s", client.jid))
-			log.Printf("Client Disconnected:  %v\n", client.jid)
+			log.Printf("[x]Client Disconnected:  %v\n", client.jid)
 			s.DisconnectBus <- Disconnect{Jid: client.jid}
 			return
 		}

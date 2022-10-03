@@ -1,4 +1,4 @@
-package xmpp
+package server
 
 import (
 	"encoding/xml"
@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	// NsStream stream namesapce
+	// NsStream stream namespace
 	NsStream = "http://etherx.jabber.org/streams"
 	// NsTLS xmpp-tls xml namespace
 	NsTLS = "urn:ietf:params:xml:ns:xmpp-tls"
@@ -16,9 +16,9 @@ const (
 	NsBind = "urn:ietf:params:xml:ns:xmpp-bind"
 	// NsSession xmpp-session xml namespace
 	NsSession = "urn:ietf:params:xml:ns:xmpp-session"
-	// NsClient jabbet client namespace
+	// NsClient jabber client namespace
 	NsClient = "jabber:client"
-	// NsAuth jabbet auth namespace
+	// NsAuth jabber auth namespace
 	NsIQAuth = "jabber:iq:auth"
 )
 
@@ -130,9 +130,9 @@ type ClientIQ struct { // info/query
 	ID      string      `xml:"id,attr"`
 	To      string      `xml:"to,attr"`
 	Type    string      `xml:"type,attr"` // error, get, result, set
-	Error   ClientError `xml:"error"`
-	Bind    bindBind    `xml:"bind"`
-	Query   []byte      `xml:",innerxml"`
+	Error ClientError `xml:"error"`
+	Bind  bindBind    `xml:"bind"`
+	Query []byte      `xml:",innerxml"`
 	// RosterRequest - better detection of iq's
 }
 

@@ -1,4 +1,4 @@
-package xmpp
+package server
 
 import (
 	"encoding/xml"
@@ -20,7 +20,8 @@ type DebugExtension struct {
 // Process a message (write to debug logger)
 func (e *DebugExtension) Process(message interface{}, from *Client) {
 	data, _ := xml.Marshal(message)
-	e.Log.Debug("Processing message: " + string(data))
+	//e.Log.Debug("Processing message: " + string(data))
+	log.Println("[ex] DebugExtension Processing message: " + string(data))
 }
 
 // NormalMessageExtension handles client messages
@@ -32,6 +33,7 @@ type NormalMessageExtension struct {
 func (e *NormalMessageExtension) Process(message interface{}, from *Client) {
 	parsed, ok := message.(*ClientMessage)
 	if ok {
+		log.Println("[ex] NormalMessageExtension Process")
 		e.MessageBus <- Message{To: parsed.To, Data: message}
 	}
 }
@@ -47,9 +49,9 @@ func (e *RosterExtension) Process(message interface{}, from *Client) {
 
 	// handle things we need to handle
 	if ok {
-		log.Printf("query: %v", string(parsed.Query))
+		log.Printf("[ex] query: %v", string(parsed.Query))
 	} else {
-		log.Println("no query")
+		log.Println("[ex] no query")
 		return
 	}
 
@@ -81,7 +83,7 @@ func (e *RosterExtension) Process(message interface{}, from *Client) {
 
 	if string(parsed.Query) == "<error type='wait'><resource-constraint/></error>" ||
 		string(parsed.Query) == "<error type=\"wait\"><resource-constraint/></error>" {
-		log.Printf("Device Busy Try again : %v", from.jid)
+		log.Printf("[ex] Device Busy Try again : %v", from.jid)
 		// go func() {
 		// 	if from.bRetry {
 		// 		return
@@ -103,8 +105,8 @@ type PresenceExtension struct {
 func (e *PresenceExtension) Process(message interface{}, from *Client) {
 	parsed, ok := message.(*ClientPresence)
 	if ok {
-		log.Printf("presence: %v", parsed)
-		log.Printf("delay: %v", parsed.Delay)
+		log.Printf("[ex] presence extension: %v", parsed)
+		log.Printf("[ex] delay: %v", parsed.Delay)
 		// this is how you reply to a message: from.messages <- message
 
 		// types:
@@ -123,11 +125,11 @@ func (e *PresenceExtension) Process(message interface{}, from *Client) {
 		// the server will then push to the message chan for all other clients
 		// difficult to - alert the 'to' field of the message
 
-		// if i receive a presense message from the client, put it on the presence
+		// if i receive a presence message from the client, put it on the presence
 		// bus for broadcasting to subscribers/peers
 		// server should alter message
 		e.PresenceBus <- Message{To: parsed.To, Data: message}
 	} else {
-		log.Println("no presence")
+		log.Println("[ex] no presence")
 	}
 }
