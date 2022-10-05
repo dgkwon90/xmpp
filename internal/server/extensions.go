@@ -49,50 +49,63 @@ func (e *RosterExtension) Process(message interface{}, from *Client) {
 
 	// handle things we need to handle
 	if ok {
-		log.Printf("[ex] query: %v", string(parsed.Query))
+		log.Printf("[ex] type: %v\n", parsed.Type)
+		log.Printf("[ex] From: %v\n", parsed.From)
+		log.Printf("[ex] To: %v\n", parsed.To)
+		log.Printf("[ex] Error: %v\n", parsed.Error)
+		log.Printf("[ex] Bind: %v\n", parsed.Bind)
+		log.Printf("[ex] ID: %v\n", parsed.ID)
+		log.Printf("[ex] XMLName: %v\n", parsed.XMLName)
+		log.Printf("[ex] query: %v\n", string(parsed.Query))
+
+		// Receive ping from client. *reference XEP-0199: XMPP Ping
+		//if parsed.Type == "get" && (string(parsed.Query) == "<ping xmlns=\"urn:xmpp:ping\"/>") {
+		if parsed.Type == "get" && parsed.ID == "c2s1" {
+			log.Println("[ex] receive ping")
+			// response pong message
+			msg := fmt.Sprintf("<iq from='%v' to='%v' id='c2s1' type='result'/>", parsed.To, parsed.From)
+			from.messages <- msg
+
+			// client is Beating
+			from.heartbeat.Beating()
+		}
+
+		if string(parsed.Query) == "<query xmlns='jabber:iq:roster'/>" {
+			// respond with roster
+			roster, _ := e.Accounts.OnlineRoster(from.jid)
+			msg := "<iq id='" + parsed.ID + "' to='" + parsed.From + "' type='result'><query xmlns='jabber:iq:roster' ver='ver7'>"
+			for _, v := range roster {
+				msg = msg + "<item jid='" + v + "'/>"
+			}
+			msg = msg + "</query></iq>"
+
+			// respond to client
+			from.messages <- msg
+		}
+
+		if parsed.Type == "set" && (string(parsed.Query) == "<session xmlns=\"urn:ietf:params:xml:ns:xmpp-session\"/>" ||
+			string(parsed.Query) == "<session xmlns='urn:ietf:params:xml:ns:xmpp-session'/>") {
+			//<iq xml:lang='en' to='00155d-stb-bsp123123126@xmpp-demo.kaonmedia.com/XMPPConn1' from='00155d-stb-bsp123123126@xmpp-demo.kaonmedia.com' type='result' id='_xmpp_session1'/>
+			ids := strings.Split(from.jid, "/")
+			msg := "<iq xml:lang='en' to='" + from.jid + "' from='" + ids[0] + "' type='result' id='_xmpp_session1'/>"
+			from.messages <- msg
+		}
+
+		if string(parsed.Query) == "<error type='wait'><resource-constraint/></error>" ||
+			string(parsed.Query) == "<error type=\"wait\"><resource-constraint/></error>" {
+			log.Printf("[ex] Device Busy Try again : %v", from.jid)
+			// go func() {
+			// 	if from.bRetry {
+			// 		return
+			// 	} else {
+			// 		from.bRetry = true
+			// 		time.Sleep(time.Second * 3)
+			// 		from.messages <- "connreq"
+			// 	}
+			// }()
+		}
 	} else {
 		log.Println("[ex] no query")
-		return
-	}
-
-	if string(parsed.Query) == "<query xmlns='jabber:iq:roster'/>" {
-		// respond with roster
-		roster, _ := e.Accounts.OnlineRoster(from.jid)
-		msg := "<iq id='" + parsed.ID + "' to='" + parsed.From + "' type='result'><query xmlns='jabber:iq:roster' ver='ver7'>"
-		for _, v := range roster {
-			msg = msg + "<item jid='" + v + "'/>"
-		}
-		msg = msg + "</query></iq>"
-
-		// respond to client
-		from.messages <- msg
-	}
-
-	if parsed.Type == "set" && (string(parsed.Query) == "<session xmlns=\"urn:ietf:params:xml:ns:xmpp-session\"/>" ||
-		string(parsed.Query) == "<session xmlns='urn:ietf:params:xml:ns:xmpp-session'/>") {
-		//<iq xml:lang='en' to='00155d-stb-bsp123123126@xmpp-demo.kaonmedia.com/XMPPConn1' from='00155d-stb-bsp123123126@xmpp-demo.kaonmedia.com' type='result' id='_xmpp_session1'/>
-		ids := strings.Split(from.jid, "/")
-		msg := "<iq xml:lang='en' to='" + from.jid + "' from='" + ids[0] + "' type='result' id='_xmpp_session1'/>"
-		from.messages <- msg
-	}
-
-	if parsed.Type == "get" && (string(parsed.Query) == "<ping xmlns=\"urn:xmpp:ping\"/>") {
-		msg := fmt.Sprintf("<iq from='%v' to='%v' id='c2s1' type='result'/>", parsed.To, parsed.From)
-		from.messages <- msg
-	}
-
-	if string(parsed.Query) == "<error type='wait'><resource-constraint/></error>" ||
-		string(parsed.Query) == "<error type=\"wait\"><resource-constraint/></error>" {
-		log.Printf("[ex] Device Busy Try again : %v", from.jid)
-		// go func() {
-		// 	if from.bRetry {
-		// 		return
-		// 	} else {
-		// 		from.bRetry = true
-		// 		time.Sleep(time.Second * 3)
-		// 		from.messages <- "connreq"
-		// 	}
-		// }()
 	}
 }
 
@@ -128,7 +141,13 @@ func (e *PresenceExtension) Process(message interface{}, from *Client) {
 		// if i receive a presence message from the client, put it on the presence
 		// bus for broadcasting to subscribers/peers
 		// server should alter message
-		e.PresenceBus <- Message{To: parsed.To, Data: message}
+		log.Println("[ex] To: ", parsed.To)
+		log.Println("[ex] Msg: ", message)
+		if len(parsed.To) > 0 {
+			e.PresenceBus <- Message{To: parsed.To, Data: message}
+		} else {
+			log.Println("[ex] To is nil: ", parsed.To)
+		}
 	} else {
 		log.Println("[ex] no presence")
 	}

@@ -18,8 +18,10 @@ const (
 	NsSession = "urn:ietf:params:xml:ns:xmpp-session"
 	// NsClient jabber client namespace
 	NsClient = "jabber:client"
-	// NsAuth jabber auth namespace
-	NsIQAuth = "jabber:iq:auth"
+	// NsIQAuth jabber auth namespace
+	//NsIQAuth = "jabber:iq:auth"
+	// NsIQPing jabber ping namespace
+	//NsIQPing = "urn:xmpp:ping"
 )
 
 // RFC 3920  C.1  Streams name space
@@ -136,6 +138,10 @@ type ClientIQ struct { // info/query
 	// RosterRequest - better detection of iq's
 }
 
+type Ping struct {
+	XMLName xml.Name    `xml:"urn:xmpp:ping ping"`
+}
+
 // ClientError element
 type ClientError struct {
 	XMLName xml.Name `xml:"jabber:client error"`
@@ -174,9 +180,9 @@ type RosterRequestItem struct {
 	Group        []string `xml:"group"`
 }
 
-type IQQuery struct {
-	XMLName xml.Name `xml:"jabber:iq:auth query"`
-}
+//type IQQuery struct {
+//	XMLName xml.Name `xml:"jabber:iq:auth query"`
+//}
 
 // MessageTypes map of known message types
 var MessageTypes = map[xml.Name]reflect.Type{
@@ -191,5 +197,5 @@ var MessageTypes = map[xml.Name]reflect.Type{
 	{Space: NsClient, Local: "presence"}: reflect.TypeOf(ClientPresence{}),
 	{Space: NsClient, Local: "iq"}:       reflect.TypeOf(ClientIQ{}),
 	{Space: NsClient, Local: "error"}:    reflect.TypeOf(ClientError{}),
-	{Space: NsIQAuth, Local: "query"}:    reflect.TypeOf(IQQuery{}),
+	//{Space: NsIQAuth, Local: "query"}:    reflect.TypeOf(IQQuery{}),
 }

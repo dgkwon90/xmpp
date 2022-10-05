@@ -21,26 +21,48 @@ const (
 
 /* Main server loop */
 func main() {
-	//log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+	// set flag for log
+	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
+	// l.Info("starting server")
+	log.Println("[ms] starting server")
+
+	// define env value
 	envPort := 5222
-	logLevel := logger.DebugLevel
+	envLogLevel := logger.DebugLevel
 	envSkipTLS := true
 	envDomain := "localhost"
 	envSelfXmppClient := selfXMppServerClient
 	envSelfXmppClientPassword := selfXmppServerClientPassword
+	envSelfXMppClientResource := selfXmppServerClientResource
 
+	// l.Info("listening on localhost:" + fmt.Sprintf("%d", *portPtr))
+	log.Println("====== env values ======")
+	log.Printf("[ms] listening on localhost: %v\n", envPort)
+	log.Printf("[ms] debug level: %v\n", envLogLevel)
+	log.Printf("[ms] skip tls: %v\n", envSkipTLS)
+	log.Printf("[ms] domain: %v\n", envDomain)
+	log.Printf("[ms] admin client: %v\n", envSelfXmppClient)
+	log.Printf("[ms] admin password: %v\n", envSelfXmppClientPassword)
+	log.Printf("[ms] admin resource: %v\n", envSelfXMppClientResource)
+	log.Println("==============================")
 	// portPtr := flag.Int("port", envPort, "port number to listen on")
-	// logLevelPtr := flag.Int("loggerLevel", logLevel, "set level logging")
+	// logLevelPtr := flag.Int("loggerLevel", envLogLevel, "set level logging")
 	// flag.Parse()
 
-	var adminUser = account.AdminUser{Name: envSelfXmppClient, Password: envSelfXmppClientPassword}
+	var adminUser = account.AdminUser{
+		Name:     envSelfXmppClient,
+		Password: envSelfXmppClientPassword,
+		Resource: envSelfXMppClientResource,
+	}
 
 	//var registered = make(map[string]string)
 
 	var activeUsers = make(map[string]chan<- interface{})
 
-	var l = logger.Logger{Level: logger.Level(logLevel)}
+	var l = logger.Logger{
+		Level: logger.Level(envLogLevel),
+	}
 
 	var messageBus = make(chan server.Message)
 	var presenceBus = make(chan server.Message)
@@ -77,11 +99,6 @@ func main() {
 		TLSConfig:     &tlsConfig,
 	}
 
-	// l.Info("starting server")
-	log.Println("[ms] starting server")
-	// l.Info("listening on localhost:" + fmt.Sprintf("%d", *portPtr))
-	log.Printf("[ms] listening on localhost: %v\n", envPort)
-
 	// Listen for incoming connections.
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", envPort))
 	if err != nil {
@@ -91,7 +108,7 @@ func main() {
 	defer func() {
 		closeErr := listener.Close()
 		if closeErr != nil {
-			log.Println("[ms][error]: ", closeErr)
+			log.Println("[ms][error] listener close: ", closeErr)
 		}
 	}()
 
@@ -100,22 +117,12 @@ func main() {
 	go am.ConnectRoutine(connectBus)
 	go am.DisconnectRoutine(disconnectBus)
 	go am.PresenceRoutine(presenceBus)
-
-	// TODO: HeartBeatRouting()
-	//go am.HeartBeatRoutine()
-
-	// DEBUG TEST
-	// xmppServer.Log.Info("=========== DEBUG TEST ===========")
-	// xmppServer.Log.Error("Error LEVEL")
-	// xmppServer.Log.Waring("Waring LEVEL")
-	// xmppServer.Log.Info("Info LEVEL")
-	// xmppServer.Log.Debug("Debug LEVEL")
+	//go am.KeepAliveRoutine(keepAliveBus)
 
 	// Handle each connection.
+	log.Println("[ms] start client connection routine...")
 	for {
-		log.Println("[ms] start listen")
 		conn, acceptErr := listener.Accept()
-
 		if acceptErr != nil {
 			//l.Error(fmt.Sprintf("Could not accept connection: %s", err.Error()))
 			log.Printf("[ms][error] could not accept connection: %v\n", err.Error())

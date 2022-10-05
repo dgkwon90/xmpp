@@ -44,6 +44,25 @@ func (c *Connection) Next() (xml.StartElement, error) {
 	}
 }
 
+// NextExt scans the stream to find the next xml.StartElement or xml.CharData
+func (c *Connection) NextExt() (interface{}, error) {
+	// loop until a start element token is found
+	for {
+		nextToken, err := c.in.Token()
+		if err != nil {
+			return xml.StartElement{}, err
+		}
+		switch token := nextToken.(type) {
+		case xml.StartElement:
+			return token, nil
+
+		case xml.CharData:
+			log.Printf("xmpp: received xml char %v", token)
+			return token, nil
+		}
+	}
+}
+
 // Read the Element from the stream and reflect interface to known message types
 func (c *Connection) Read(se xml.StartElement) (xml.Name, interface{}, error) {
 	// Put start element in an interface and allocate one.

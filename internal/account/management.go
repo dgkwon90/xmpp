@@ -107,16 +107,20 @@ func (a Management) OnlineRoster(jid string) (online []string, err error) {
 
 // PresenceRoutine new WIP func for presence messages
 func (a Management) PresenceRoutine(bus <-chan server.Message) {
-	log.Println("[am] new rresenceroutine")
+	log.Println("[am] new presence routine")
 
 	for {
 		message := <-bus
 		a.Mutex.Lock()
-
-		for _, userChannel := range a.Online {
-			userChannel <- message.Data
+		//message.To
+		for jid, userChannel := range a.Online {
+			log.Println("[am] jid: ", jid)
+			if userChannel != nil {
+				userChannel <- message.Data
+			} else {
+				log.Println("[am] user channel is nil")
+			}
 		}
-
 		a.Mutex.Unlock()
 	}
 }
@@ -161,7 +165,19 @@ func (a Management) DisconnectRoutine(bus <-chan server.Disconnect) {
 		//a.log.Info(fmt.Sprintf("[am] %s disconnected", message.Jid))
 		log.Printf("[am] %v disconnected\n", message.Jid)
 		delete(a.Online, message.Jid)
-
 		a.Mutex.Unlock()
 	}
 }
+
+//func (a Management) KeepAliveRoutine(bus <-chan server.KeepAlive) {
+//	log.Println("[am] new Keep Alive routine")
+//	for {
+//		message := <-bus
+//		a.Mutex.Lock()
+//
+//		//a.log.Info(fmt.Sprintf("[am] %s disconnected", message.Jid))
+//		log.Printf("[am] %v disconnected\n", message.Jid)
+//		delete(a.Online, message.Jid)
+//		a.Mutex.Unlock()
+//	}
+//}

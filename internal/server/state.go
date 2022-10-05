@@ -3,9 +3,11 @@ package server
 import (
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/xml"
 	"errors"
 	"log"
 	"strings"
+	"xmpp/internal/keepalive"
 )
 
 // State processes the stream and moves to the next state
@@ -42,7 +44,9 @@ type Start struct {
 
 // Process message
 func (state *Start) Process(c *Connection, client *Client, s *Server) (State, *Connection, error) {
-	log.Println("[st][Start] Process!!!")
+	log.Println("[st][Start] Start Process <<<<<")
+	defer log.Printf("[st][Start] End Process >>>>>\n\n")
+
 	se, err := c.Next()
 	if err != nil {
 		return nil, c, err
@@ -69,7 +73,6 @@ func (state *Start) Process(c *Connection, client *Client, s *Server) (State, *C
 			log.Println("[st][Start][error]: ", sendErr)
 		}
 	}
-
 	return state.Next, c, nil
 }
 
@@ -80,7 +83,8 @@ type TLSUpgradeRequest struct {
 
 // Process message
 func (state *TLSUpgradeRequest) Process(c *Connection, client *Client, s *Server) (State, *Connection, error) {
-	log.Println("[st][TLSUpgradeRequest]TLSUpgradeRequest Process!!!")
+	log.Println("[st][TLSUpgradeRequest] Start Process <<<<<")
+	defer log.Printf("[st][TLSUpgradeRequest] End Process >>>>>\n\n")
 	_, err := c.Next()
 	if err != nil {
 		return nil, c, err
@@ -96,7 +100,8 @@ type TLSUpgrade struct {
 
 // Process message
 func (state *TLSUpgrade) Process(c *Connection, client *Client, s *Server) (State, *Connection, error) {
-	log.Println("[st][TLSUpgrade]TLSUpgrade Process!!!")
+	log.Println("[st][TLSUpgrade] Start Process <<<<<")
+	defer log.Printf("[st][TLSUpgrade] End Process >>>>>\n\n")
 	sendErr := c.SendRaw("<proceed xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>")
 	if sendErr != nil {
 		log.Println("[st][ERROR]: ", sendErr)
@@ -120,7 +125,8 @@ type TLSStartStream struct {
 
 // Process messages
 func (state *TLSStartStream) Process(c *Connection, client *Client, s *Server) (State, *Connection, error) {
-	log.Println("[st][TLSStartStream]TLSStartStream Process!!!")
+	log.Println("[st][TLSStartStream] Start Process <<<<<")
+	defer log.Printf("[st][TLSStartStream] End Process >>>>>\n\n")
 	_, err := c.Next()
 	if err != nil {
 		return nil, c, err
@@ -144,7 +150,8 @@ type TLSAuth struct {
 
 // Process messages
 func (state *TLSAuth) Process(c *Connection, client *Client, s *Server) (State, *Connection, error) {
-	log.Println("[st][TLSAuth]TLSAuth Process!!!")
+	log.Println("[st][TLSAuth] Start Process <<<<<")
+	defer log.Printf("[st][TLSAuth] End Process >>>>>\n\n")
 	se, err := c.Next()
 	if err != nil {
 		return nil, c, err
@@ -197,40 +204,43 @@ type Auth struct {
 }
 
 func (state *Auth) Process(c *Connection, client *Client, s *Server) (State, *Connection, error) {
-	log.Println("[st][Auth] Auth Process!!!")
+	log.Println("[st][Auth] Start Process <<<<<")
+	defer log.Printf("[st][Auth] End Process >>>>>\n\n")
+
+	log.Println("[st][Auth] wait client next...")
 	se, err := c.Next()
 	if err != nil {
 		log.Printf("[st][Auth] Auth (%v) Error : %v\n", client.jid, err)
 		return nil, c, err
 	}
+	log.Printf("[st][Auth] Auth next full auth stanza:%v\n", se)
 
 	//s.Log.Info(fmt.Sprintf("Auth read : %v", se))
 	//log.Printf("[st][Auth] Auth read: %v\n", se)
 	// TODO: check what client sends, auth or register
 
 	// read the full auth stanza
-	name, val, err := c.Read(se)
-	//s.Log.Info(fmt.Sprintf("Auth read full auth stanza : %v", se))
-	log.Printf("[st][Auth] Auth read full auth stanza:%v\n", se)
-	log.Printf("[st][Auth] Auth read name: %v, val: %v \n", name, val)
-
-	if err != nil {
+	name, val, readErr := c.Read(se)
+	if readErr != nil {
 		//s.Log.Error(errors.New("Unable to read auth stanza").Error())
 		log.Println("[st][Auth] Unable to read auth stanza")
-		return nil, c, err
+		return nil, c, readErr
 	}
+
+	//s.Log.Info(fmt.Sprintf("Auth read full auth stanza : %v", se))
+	log.Printf("[st][Auth] Auth read name: %v, val: %v \n", name, val)
 
 	switch v := val.(type) {
 	case *saslAuth:
-		data, err := base64.StdEncoding.DecodeString(v.Body)
-		if err != nil {
-			return nil, c, err
+		data, decodeErr := base64.StdEncoding.DecodeString(v.Body)
+		if decodeErr != nil {
+			return nil, c, decodeErr
 		}
 		info := strings.Split(string(data), "\x00")
 		// should check that info[1] starts with client.jid
-		success, err := s.Accounts.Authenticate(info[1], info[2])
-		if err != nil {
-			return nil, c, err
+		success, authErr := s.Accounts.Authenticate(info[1], info[2])
+		if authErr != nil {
+			return nil, c, authErr
 		}
 
 		if success {
@@ -262,7 +272,10 @@ type AuthedStart struct {
 
 // Process messages
 func (state *AuthedStart) Process(c *Connection, client *Client, s *Server) (State, *Connection, error) {
-	log.Println("[st][AuthedStart] AuthedStart Process!!!")
+	log.Println("[st][AuthedStart] Start Process <<<<<")
+	defer log.Printf("[st][AuthedStart] End Process >>>>>\n\n")
+
+	log.Println("[st][AuthedStart] wait client next...")
 	se, err := c.Next()
 	if err != nil {
 		return nil, c, err
@@ -289,13 +302,16 @@ type AuthedStream struct {
 
 // Process messages
 func (state *AuthedStream) Process(c *Connection, client *Client, s *Server) (State, *Connection, error) {
-	log.Println("[st][AuthedStream]AuthedStream Process!!!")
+	log.Println("[st][AuthedStream] Start Process <<<<<")
+	defer log.Printf("[st][AuthedStream] End Process >>>>>\n\n")
+
+	log.Println("[st][AuthedStream] wait client next...")
 	se, err := c.Next()
 	if err != nil {
 		return nil, c, err
 	}
 
-	log.Println("[st][AuthedStream]Read Start element:", se)
+	log.Println("[st][AuthedStream] Read Start element:", se)
 
 	// check that it's a bind request
 	// read bind request
@@ -303,8 +319,8 @@ func (state *AuthedStream) Process(c *Connection, client *Client, s *Server) (St
 	if err != nil {
 		return nil, c, err
 	}
-	log.Println("[st][AuthedStream]Read Start name:", name)
-	log.Println("[st][AuthedStream]Read val:", val)
+	log.Println("[st][AuthedStream] Read Start name:", name)
+	log.Println("[st][AuthedStream] Read val:", val)
 
 	switch v := val.(type) {
 	case *ClientIQ:
@@ -333,6 +349,11 @@ func (state *AuthedStream) Process(c *Connection, client *Client, s *Server) (St
 			log.Println("[st][AuthedStream][ERROR]: ", sendErr)
 		}
 		s.ConnectBus <- Connect{Jid: client.jid, Receiver: client.messages}
+
+		// create and start client heartbeat
+		client.heartbeat = keepalive.New(20, 2)
+		go client.heartbeat.Start()
+
 	default:
 		//s.Log.Error(errors.New("Expected ClientIQ message").Error())
 		log.Println("[st][AuthedStream]Expected ClientIQ message")
@@ -346,53 +367,84 @@ type Normal struct{}
 
 // Process messages
 func (state *Normal) Process(c *Connection, client *Client, s *Server) (State, *Connection, error) {
-	log.Println("[st][Normal]Normal Process!!!")
+	log.Println("[st][Normal] Start Process <<<<<")
+	defer log.Printf("[st][Normal] End Process >>>>>\n\n")
 	var err error
-	readDone := make(chan bool)
-	chanErr := make(chan error)
+	nextReadDone := make(chan bool)
+	nextReadErr := make(chan error)
 
 	// one go routine to read/respond
 	go func(done chan bool, errors chan error) {
 		for {
-			se, err := c.Next()
-			if err != nil {
-				log.Printf("err: %v\n", err.Error())
-				errors <- err
+			log.Println("[st][Normal] wait client next...")
+			ex, nextErr := c.NextExt()
+			if nextErr != nil {
+				log.Printf("[st][Normal][ERROR] err: %v\n", nextErr.Error())
+				errors <- nextErr
 				done <- true
 				return
 			}
-			log.Printf("[st][Normal]start element: %v\n", se)
 
-			name, val, readErr := c.Read(se)
-			if readErr != nil {
-				log.Printf("[st][Normal]Read Error: %v\n", err.Error())
-			} else {
-				log.Printf("[st][Normal]Read Name[%v]: %v\n", name, val)
-			}
+			switch data := ex.(type) {
+			case xml.StartElement:
+				log.Printf("[st][Normal] start element: %v\n", data)
+				name, val, readErr := c.Read(data)
+				if readErr != nil {
+					log.Printf("[st][Normal] Read Error: %v\n", err.Error())
+				} else {
+					log.Printf("[st][Normal] Read Name[%v]: %v\n", name, val)
+				}
 
-			for _, extension := range s.Extensions {
-				extension.Process(val, client)
+				for _, extension := range s.Extensions {
+					extension.Process(val, client)
+				}
+			case xml.CharData:
+				// https://xmpp.org/rfcs/rfc6120.html#xml-whitespace
+				// rfc6120, section 1.4: "whitespace" is used to refer to any character
+				// or characters matching [...] SP, HTAB, CR, or LF.
+				switch string(data) {
+				case " ", "\t", "\r", "\n": //TODO: consider more than one whitespace
+					log.Println("[st][Normal] xmpp: received whitespace ping")
+					client.heartbeat.Beating()
+				}
 			}
 		}
-	}(readDone, chanErr)
+	}(nextReadDone, nextReadErr)
 
 	for {
 		select {
 		case messages := <-client.messages:
+			log.Println("[st][Normal] client messages")
 			switch msg := messages.(type) {
 			default:
+				log.Println("[st][Normal] default type")
 				err = c.SendStanza(msg)
+
 			case string:
+				log.Println("[st][Normal] string type")
 				err = c.SendRaw(msg)
+
 			}
 			if err != nil {
-				chanErr <- err
+				nextReadErr <- err
 			}
-		case <-readDone:
+
+		case <-nextReadDone:
+			log.Println("[st][Normal] <- nextReadDone")
+			// readDone, client stop checking heartbeat.
+			client.heartbeat.Stop()
 			return nil, c, nil
-		case err := <-chanErr:
+
+		case connErr := <-nextReadErr:
 			//s.Log.Error(fmt.Sprintf("Connection Error: %s", err.Error()))
-			log.Printf("[st][Normal]Connection Error: %v\n", err.Error())
+			log.Printf("[st][Normal] nextRead Error: %v\n", connErr.Error())
+
+		case <-client.heartbeat.IsStop:
+
+			// client heart stopped. disconnect device.
+			log.Printf("[st][Normal] %v: heartbeatIsStop\n", client.jid)
+			client.heartbeat.Stop()
+			return nil, c, nil
 		}
 	}
 }

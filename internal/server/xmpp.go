@@ -10,6 +10,7 @@ import (
 	"crypto/tls"
 	"log"
 	"net"
+	"xmpp/internal/keepalive"
 )
 
 // Client xmpp connection
@@ -19,6 +20,7 @@ type Client struct {
 	domainPart   string
 	resourcePart string
 	messages     chan interface{}
+	heartbeat    *keepalive.Heartbeat
 }
 
 // AccountManager performs roster management and authentication
@@ -85,30 +87,29 @@ type Disconnect struct {
 
 // TCPAnswer sends connection through the TSLStateMachine
 func (s *Server) TCPAnswer(conn net.Conn) {
+	log.Printf("\n\n")
+	log.Println("[x] client connection")
 	defer func() {
 		closeErr := conn.Close()
 		if closeErr != nil {
-			log.Println("[x][ERROR]:", closeErr)
+			log.Println("[x][ERROR] network connection close : ", closeErr)
 		}
 	}()
 
-	//s.Log.Info(fmt.Sprintf("Accepting TCP connection from: %s", conn.RemoteAddr()))
-	log.Printf("[x]Accepting TCP connection from: %v\n", conn.RemoteAddr())
-	log.Printf("[x]connection LocalAddr: %v\n", conn.LocalAddr())
+	log.Printf("[x] Accepting TCP connection from: %v\n", conn.RemoteAddr())
+	log.Printf("[x] connection LocalAddr: %v\n", conn.LocalAddr())
+
 	state := NewTLSStateMachine(s.SkipTLS)
 
 	// create new client
 	client := &Client{
 		messages: make(chan interface{}),
-		//domainPart:   s.Domain,
-		//resourcePart: "XMPPConn1",
 	}
 	defer close(client.messages)
 
 	clientConnection := NewConn(conn, MessageTypes)
 	for {
 		var err error
-		log.Println("\n\n[x]state process >>>")
 		state, clientConnection, err = state.Process(clientConnection, client, s)
 		//s.Log.Debug(fmt.Sprintf("[state] %s", state))
 
@@ -119,7 +120,7 @@ func (s *Server) TCPAnswer(conn net.Conn) {
 		}
 		if state == nil {
 			//s.Log.Info(fmt.Sprintf("Client Disconnected: %s", client.jid))
-			log.Printf("[x]Client Disconnected:  %v\n", client.jid)
+			log.Printf("[x] Client Disconnected:  %v\n", client.jid)
 			s.DisconnectBus <- Disconnect{Jid: client.jid}
 			return
 		}
