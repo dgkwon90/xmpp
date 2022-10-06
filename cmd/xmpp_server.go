@@ -13,12 +13,6 @@ import (
 	"sync"
 )
 
-const (
-	selfXMppServerClient         = "selfXmppClient"
-	selfXmppServerClientPassword = "test1234"
-	selfXmppServerClientResource = "XMPPConn1"
-)
-
 /* Main server loop */
 func main() {
 	// set flag for log
@@ -32,9 +26,11 @@ func main() {
 	envLogLevel := logger.DebugLevel
 	envSkipTLS := true
 	envDomain := "localhost"
-	envSelfXmppClient := selfXMppServerClient
-	envSelfXmppClientPassword := selfXmppServerClientPassword
-	envSelfXMppClientResource := selfXmppServerClientResource
+	envSelfXmppClient := "selfXmppClient"
+	envSelfXmppClientPassword := "test1234"
+	envSelfXMppClientResource := "XMPPConn1"
+	envHeartbeatInterval := 30
+	envHeartbeatMaxCount := 3
 
 	// l.Info("listening on localhost:" + fmt.Sprintf("%d", *portPtr))
 	log.Println("====== env values ======")
@@ -45,6 +41,8 @@ func main() {
 	log.Printf("[ms] admin client: %v\n", envSelfXmppClient)
 	log.Printf("[ms] admin password: %v\n", envSelfXmppClientPassword)
 	log.Printf("[ms] admin resource: %v\n", envSelfXMppClientResource)
+	log.Printf("[ms] Heartbeat Interval: %v\n", envHeartbeatInterval)
+	log.Printf("[ms] Heartbeat MaxcCount: %v\n", envHeartbeatMaxCount)
 	log.Println("==============================")
 	// portPtr := flag.Int("port", envPort, "port number to listen on")
 	// logLevelPtr := flag.Int("loggerLevel", envLogLevel, "set level logging")
@@ -97,6 +95,10 @@ func main() {
 		DisconnectBus: disconnectBus,
 		Domain:        envDomain,
 		TLSConfig:     &tlsConfig,
+
+		// Heartbeat
+		HeartbeatInterval: envHeartbeatInterval,
+		HeartbeatMaxCount: envHeartbeatMaxCount,
 	}
 
 	// Listen for incoming connections.

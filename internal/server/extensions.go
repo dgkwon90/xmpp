@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/xml"
-	"fmt"
 	"log"
 	"strings"
 )
@@ -58,17 +57,17 @@ func (e *RosterExtension) Process(message interface{}, from *Client) {
 		log.Printf("[ex] XMLName: %v\n", parsed.XMLName)
 		log.Printf("[ex] query: %v\n", string(parsed.Query))
 
-		// Receive ping from client. *reference XEP-0199: XMPP Ping
-		//if parsed.Type == "get" && (string(parsed.Query) == "<ping xmlns=\"urn:xmpp:ping\"/>") {
-		if parsed.Type == "get" && parsed.ID == "c2s1" {
-			log.Println("[ex] receive ping")
-			// response pong message
-			msg := fmt.Sprintf("<iq from='%v' to='%v' id='c2s1' type='result'/>", parsed.To, parsed.From)
-			from.messages <- msg
+		// // Receive ping from client. *reference XEP-0199: XMPP Ping
+		// //if parsed.Type == "get" && (string(parsed.Query) == "<ping xmlns=\"urn:xmpp:ping\"/>") {
+		// if parsed.Type == "get" && parsed.ID == "c2s1" {
+		// 	log.Println("[ex] receive ping")
+		// 	// response pong message
+		// 	msg := fmt.Sprintf("<iq from='%v' to='%v' id='c2s1' type='result'/>", parsed.To, parsed.From)
+		// 	from.messages <- msg
 
-			// client is Beating
-			from.heartbeat.Beating()
-		}
+		// 	// client is Beating
+		// 	// from.heartbeat.Beating()
+		// }
 
 		if string(parsed.Query) == "<query xmlns='jabber:iq:roster'/>" {
 			// respond with roster

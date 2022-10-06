@@ -5,9 +5,10 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"log"
 	"strings"
-	"xmpp/internal/keepalive"
+	"time"
 )
 
 // State processes the stream and moves to the next state
@@ -62,7 +63,9 @@ func (state *Start) Process(c *Connection, client *Client, s *Server) (State, *C
 
 	if s.SkipTLS {
 		log.Println("[st][Start] None TLS")
-		sendErr = c.SendRaw("<stream:features><mechanisms xmlns='urn:ietf:params:xml:ns:xmpp-sasl'><mechanism>PLAIN</mechanism><mechanism>X-OAUTH2</mechanism></mechanisms></stream:features>")
+		// org
+		//sendErr = c.SendRaw("<stream:features><mechanisms xmlns='urn:ietf:params:xml:ns:xmpp-sasl'><mechanism>PLAIN</mechanism><mechanism>X-OAUTH2</mechanism></mechanisms></stream:features>")
+		sendErr = c.SendRaw("<stream:features><mechanisms xmlns='urn:ietf:params:xml:ns:xmpp-sasl'><mechanism>PLAIN</mechanism></mechanisms></stream:features>")
 		if sendErr != nil {
 			log.Println("[st][Start][error]: ", sendErr)
 		}
@@ -286,12 +289,23 @@ func (state *AuthedStart) Process(c *Connection, client *Client, s *Server) (Sta
 	if sendErr != nil {
 		log.Println("[st][AuthedStart][ERROR]: ", sendErr)
 	}
-	//org
-	sendErr = c.SendRaw("<stream:features><bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'/></stream:features>")
+
+	// org
+	//sendErr = c.SendRaw("<stream:features><bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'/></stream:features>")
+
+	// old
+	// sendErr = c.SendRaw("<stream:features><bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'/>"+
+	// "<session xmlns='urn:ietf:params:xml:ns:xmpp-session'><optional/></session>"+
+	// "<c ver='LcF33OEjnzEcDbJUF4hNy/ifCdE=' node='http://auth.test.com/' hash='sha-1' xmlns='http://jabber.org/protocol/caps'/>"+
+	// "<ver xmlns='urn:xmpp:features:rosterver'/>"+
+	// "<keepalive xmlns='urn:xmpp:keepalive:0'><interval min='60' max='300'/></keepalive></stream:features>")
+
+	sendErr = c.SendRaw("<stream:features><bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'/>" +
+		"<keepalive xmlns='urn:xmpp:keepalive:0'><interval min='30' max='300'/></keepalive></stream:features>")
 	if sendErr != nil {
 		log.Println("[st][AuthedStart][ERROR]: ", sendErr)
 	}
-	//c.SendRaw("<stream:features><bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'/><session xmlns='urn:ietf:params:xml:ns:xmpp-session'><optional/></session><c ver='LcF33OEjnzEcDbJUF4hNy/ifCdE=' node='http://auth.kaonrms.com/' hash='sha-1' xmlns='http://jabber.org/protocol/caps'/><ver xmlns='urn:xmpp:features:rosterver'/><keepalive xmlns='urn:xmpp:keepalive:0'><interval min='60' max='300'/></keepalive></stream:features>")
+
 	return state.Next, c, nil
 }
 
@@ -351,8 +365,16 @@ func (state *AuthedStream) Process(c *Connection, client *Client, s *Server) (St
 		s.ConnectBus <- Connect{Jid: client.jid, Receiver: client.messages}
 
 		// create and start client heartbeat
-		client.heartbeat = keepalive.New(20, 2)
-		go client.heartbeat.Start()
+		// client.heartbeat = keepalive.New(20, 2)
+		// go client.heartbeat.Start()
+		addTime := time.Second * time.Duration(s.HeartbeatInterval*s.HeartbeatMaxCount)
+		timeDeadline := time.Now().Add(addTime)
+		setDeadlineErr := c.Raw.SetReadDeadline(timeDeadline)
+		if setDeadlineErr != nil {
+			log.Println("[st][AuthedStream] err: ", setDeadlineErr)
+		} else {
+			log.Printf("[st][AuthedStream] %v(%v) setReadDeadline: %v", client.jid, addTime, timeDeadline)
+		}
 
 	default:
 		//s.Log.Error(errors.New("Expected ClientIQ message").Error())
@@ -395,17 +417,47 @@ func (state *Normal) Process(c *Connection, client *Client, s *Server) (State, *
 					log.Printf("[st][Normal] Read Name[%v]: %v\n", name, val)
 				}
 
+				if parsed, ok := val.(*ClientIQ); ok {
+					// Receive ping from client. *reference XEP-0199: XMPP Ping
+					if parsed.Type == "get" && parsed.ID == "c2s1" {
+						log.Println("[ex] receive ping")
+						// response pong message
+						msg := fmt.Sprintf("<iq from='%v' to='%v' id='c2s1' type='result'/>", parsed.To, parsed.From)
+						client.messages <- msg
+
+						// client is Beating
+						// from.heartbeat.Beating()
+						addTime := time.Second * time.Duration(s.HeartbeatInterval*s.HeartbeatMaxCount)
+						timeDeadline := time.Now().Add(addTime)
+						setDeadlineErr := c.Raw.SetReadDeadline(timeDeadline)
+						if setDeadlineErr != nil {
+							log.Println("[st][Normal] err: ", setDeadlineErr)
+						} else {
+							log.Printf("[st][Normal] %v(%v) setReadDeadline: %v", client.jid, addTime, timeDeadline)
+						}
+					}
+				}
+
 				for _, extension := range s.Extensions {
 					extension.Process(val, client)
 				}
+
 			case xml.CharData:
 				// https://xmpp.org/rfcs/rfc6120.html#xml-whitespace
 				// rfc6120, section 1.4: "whitespace" is used to refer to any character
 				// or characters matching [...] SP, HTAB, CR, or LF.
 				switch string(data) {
 				case " ", "\t", "\r", "\n": //TODO: consider more than one whitespace
-					log.Println("[st][Normal] xmpp: received whitespace ping")
-					client.heartbeat.Beating()
+					log.Println("[st][Normal] received whitespace ping")
+					// client.heartbeat.Beating()
+					addTime := time.Second * time.Duration(s.HeartbeatInterval*s.HeartbeatMaxCount)
+					timeDeadline := time.Now().Add(addTime)
+					setDeadlineErr := c.Raw.SetReadDeadline(timeDeadline)
+					if setDeadlineErr != nil {
+						log.Println("[st][Normal] err: ", setDeadlineErr)
+					} else {
+						log.Printf("[st][Normal] %v(%v) setReadDeadline: %v", client.jid, addTime, timeDeadline)
+					}
 				}
 			}
 		}
@@ -432,19 +484,19 @@ func (state *Normal) Process(c *Connection, client *Client, s *Server) (State, *
 		case <-nextReadDone:
 			log.Println("[st][Normal] <- nextReadDone")
 			// readDone, client stop checking heartbeat.
-			client.heartbeat.Stop()
+			// client.heartbeat.Stop()
 			return nil, c, nil
 
 		case connErr := <-nextReadErr:
 			//s.Log.Error(fmt.Sprintf("Connection Error: %s", err.Error()))
 			log.Printf("[st][Normal] nextRead Error: %v\n", connErr.Error())
 
-		case <-client.heartbeat.IsStop:
+			// case <-client.heartbeat.IsStop:
 
-			// client heart stopped. disconnect device.
-			log.Printf("[st][Normal] %v: heartbeatIsStop\n", client.jid)
-			client.heartbeat.Stop()
-			return nil, c, nil
+			// 	// client heart stopped. disconnect device.
+			// 	log.Printf("[st][Normal] %v: heartbeatIsStop\n", client.jid)
+			// 	client.heartbeat.Stop()
+			// 	return nil, c, nil
 		}
 	}
 }

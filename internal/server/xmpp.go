@@ -10,7 +10,6 @@ import (
 	"crypto/tls"
 	"log"
 	"net"
-	"xmpp/internal/keepalive"
 )
 
 // Client xmpp connection
@@ -20,7 +19,7 @@ type Client struct {
 	domainPart   string
 	resourcePart string
 	messages     chan interface{}
-	heartbeat    *keepalive.Heartbeat
+	//heartbeat    *keepalive.Heartbeat
 }
 
 // AccountManager performs roster management and authentication
@@ -66,6 +65,13 @@ type Server struct {
 
 	// Injectable logging interface
 	Log Logging
+
+	// Heartbeat
+	// Heartbeat Interval
+	HeartbeatInterval int
+
+	// Heartbeat MaxCount
+	HeartbeatMaxCount int
 }
 
 // Message is a generic XMPP message to send to the To Jid
