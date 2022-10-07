@@ -84,17 +84,17 @@ type Message struct {
 
 // Connect holds a channel where the server can send messages to the specific Jid
 type Connect struct {
-	Jid      string
+	Jid       string
 	LocalPart string
-	Receiver chan<- interface{}
+	Receiver  chan<- interface{}
 }
 
 // Disconnect notifies when a jid disconnects
 type Disconnect struct {
-	Jid string
+	Jid       string
 	LocalPart string
-	Reason string // Case1: The network was disconnected due to timeout due to client non-response.
-				  // Case2: A network closed by the client.
+	Reason    string // Case1: The network was disconnected due to timeout due to client non-response.
+	// Case2: A network closed by the client.
 }
 
 // TCPAnswer sends connection through the TSLStateMachine
@@ -136,7 +136,7 @@ func (s *Server) TCPAnswer(conn net.Conn) {
 			log.Printf("[x][%v] state error: %v\n", client.jid, err.Error())
 
 			// state is normal, client conn disconnect
-			switch state.(type){
+			switch state.(type) {
 			case *Normal:
 				log.Printf("[x] client conn disconnect :  %v\n", client.jid)
 				s.DisconnectBus <- Disconnect{Jid: client.jid, LocalPart: client.localPart}

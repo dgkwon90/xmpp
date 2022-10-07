@@ -4,6 +4,7 @@ import (
 	"log"
 	"runtime"
 	"xmpp/internal/account"
+	"xmpp/internal/pkg/generate"
 	"xmpp/internal/pkg/logger"
 	"xmpp/internal/pkg/memstore"
 	"xmpp/internal/server"
@@ -36,21 +37,21 @@ func main() {
 	envDeadlineInterval := 30
 	envDeadlineMaxCount := 3
 
+	envAccountManagementID := ""
 	envSelfXmppClient := "selfXmppClient"
 	envSelfXmppClientPassword := "test1234"
 	envSelfXMppClientResource := "XMPPConn1"
 
-	 envSkipPassword:= true
+	envSkipPassword := true
 
+	// Redis
 	envUseRedis := true
-	envRedisConfHost := "localhost"
+	envRedisConfHost := "192.168.56.1"
 	envRedisConfPort := 6379
-	envRedisConfPassword := ""
+	envRedisConfPassword := "test001"
 	envRedisConfPool := 10000
 	envRedisConfTimeout := 0
 	envRedisConfClusters := ""
-	// Redis
-
 
 	// l.Info("listening on localhost:" + fmt.Sprintf("%d", *portPtr))
 	log.Println("======== env values ========")
@@ -64,6 +65,7 @@ func main() {
 	log.Printf("[ms] deadline Interval: %v\n", envDeadlineInterval)
 	log.Printf("[ms] deadline MaxcCount: %v\n", envDeadlineMaxCount)
 
+	log.Printf("[ms] accounnt management id: %v\n", envAccountManagementID)
 	log.Printf("[ms] admin client: %v\n", envSelfXmppClient)
 	log.Printf("[ms] admin password: %v\n", envSelfXmppClientPassword)
 	log.Printf("[ms] admin resource: %v\n", envSelfXMppClientResource)
@@ -101,7 +103,17 @@ func main() {
 	var connectBus = make(chan server.Connect)
 	var disconnectBus = make(chan server.Disconnect)
 
-	var am = account.Management{AdminUser: adminUser, SkipPassword: envSkipPassword/*Users: registered,*/, Online: activeUsers, Log: l, Mutex: &sync.Mutex{}, UseRedis: envUseRedis}
+	var am = account.Management{
+		AdminUser:    adminUser,
+		SkipPassword: envSkipPassword,
+		/*Users: registered,*/
+		Online:   activeUsers,
+		Log:      l,
+		Mutex:    &sync.Mutex{},
+		UseRedis: envUseRedis,
+		ID:       "xmpp-server." + generate.UUID(),
+	}
+
 	if am.UseRedis {
 		log.Println("[ms] account management use redis enable")
 		conf := &memstore.Config{

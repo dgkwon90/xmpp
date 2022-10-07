@@ -15,10 +15,9 @@ type AdminUser struct {
 	//Command  chan<- interface{}
 }
 
-
 // Management Inject account management into xmpp library
 type Management struct {
-	AdminUser AdminUser
+	AdminUser    AdminUser
 	SkipPassword bool
 	//Users     map[string]string
 	Online map[string]chan<- interface{}
@@ -27,7 +26,9 @@ type Management struct {
 
 	// redis
 	UseRedis bool
-	Redis memstore.Redis
+	Redis    memstore.Redis
+
+	ID string
 }
 
 func (m Management) Authenticate(username, password string) (success bool, err error) {
@@ -158,7 +159,7 @@ func (m Management) ConnectRoutine(bus <-chan server.Connect) {
 
 		// TODO: Redis Set Or Update Online
 		key := message.LocalPart
-		val := "xmpp-broker-01"
+		val := m.ID
 		m.saveOnline(key, val)
 
 		// TODO: Push Event
