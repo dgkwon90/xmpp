@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"strings"
 	"time"
 )
@@ -48,6 +49,7 @@ func (state *Start) Process(c *Connection, client *Client, s *Server) (State, *C
 	log.Println("[st][Start] Start Process <<<<<")
 	defer log.Printf("[st][Start] End Process >>>>>\n\n")
 
+	log.Println("[st][Start] wait client next...")
 	se, err := c.Next()
 	if err != nil {
 		return nil, c, err
@@ -65,6 +67,7 @@ func (state *Start) Process(c *Connection, client *Client, s *Server) (State, *C
 		log.Println("[st][Start] None TLS")
 		// org
 		//sendErr = c.SendRaw("<stream:features><mechanisms xmlns='urn:ietf:params:xml:ns:xmpp-sasl'><mechanism>PLAIN</mechanism><mechanism>X-OAUTH2</mechanism></mechanisms></stream:features>")
+		// support only PLAIN
 		sendErr = c.SendRaw("<stream:features><mechanisms xmlns='urn:ietf:params:xml:ns:xmpp-sasl'><mechanism>PLAIN</mechanism></mechanisms></stream:features>")
 		if sendErr != nil {
 			log.Println("[st][Start][error]: ", sendErr)
@@ -88,6 +91,8 @@ type TLSUpgradeRequest struct {
 func (state *TLSUpgradeRequest) Process(c *Connection, client *Client, s *Server) (State, *Connection, error) {
 	log.Println("[st][TLSUpgradeRequest] Start Process <<<<<")
 	defer log.Printf("[st][TLSUpgradeRequest] End Process >>>>>\n\n")
+
+	log.Println("[st][TLSUpgradeRequest] wait client next...")
 	_, err := c.Next()
 	if err != nil {
 		return nil, c, err
@@ -105,9 +110,10 @@ type TLSUpgrade struct {
 func (state *TLSUpgrade) Process(c *Connection, client *Client, s *Server) (State, *Connection, error) {
 	log.Println("[st][TLSUpgrade] Start Process <<<<<")
 	defer log.Printf("[st][TLSUpgrade] End Process >>>>>\n\n")
+
 	sendErr := c.SendRaw("<proceed xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>")
 	if sendErr != nil {
-		log.Println("[st][ERROR]: ", sendErr)
+		log.Println("[st][error]: ", sendErr)
 	}
 
 	// perform the TLS handshake
@@ -130,6 +136,8 @@ type TLSStartStream struct {
 func (state *TLSStartStream) Process(c *Connection, client *Client, s *Server) (State, *Connection, error) {
 	log.Println("[st][TLSStartStream] Start Process <<<<<")
 	defer log.Printf("[st][TLSStartStream] End Process >>>>>\n\n")
+
+	log.Println("[st][TLSStartStream] wait client next...")
 	_, err := c.Next()
 	if err != nil {
 		return nil, c, err
@@ -137,11 +145,11 @@ func (state *TLSStartStream) Process(c *Connection, client *Client, s *Server) (
 	// TODO: ensure check that se is a stream
 	sendErr := c.SendRawf("<?xml version='1.0'?><stream:stream id='%x' version='1.0' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams'>", createCookie())
 	if sendErr != nil {
-		log.Println("[st][ERROR]: ", sendErr)
+		log.Println("[st][error]: ", sendErr)
 	}
 	sendErr = c.SendRaw("<stream:features><mechanisms xmlns='urn:ietf:params:xml:ns:xmpp-sasl'><mechanism>PLAIN</mechanism></mechanisms></stream:features>")
 	if sendErr != nil {
-		log.Println("[st][ERROR]: ", sendErr)
+		log.Println("[st][error]: ", sendErr)
 	}
 	return state.Next, c, nil
 }
@@ -155,6 +163,8 @@ type TLSAuth struct {
 func (state *TLSAuth) Process(c *Connection, client *Client, s *Server) (State, *Connection, error) {
 	log.Println("[st][TLSAuth] Start Process <<<<<")
 	defer log.Printf("[st][TLSAuth] End Process >>>>>\n\n")
+
+	log.Println("[st][TLSAuth] wait client next...")
 	se, err := c.Next()
 	if err != nil {
 		return nil, c, err
@@ -184,13 +194,13 @@ func (state *TLSAuth) Process(c *Connection, client *Client, s *Server) (State, 
 			client.localPart = info[1]
 			sendErr := c.SendRaw("<success xmlns='urn:ietf:params:xml:ns:xmpp-sasl'/>")
 			if sendErr != nil {
-				log.Println("[st][TLSAuth][ERROR]: ", sendErr)
+				log.Println("[st][TLSAuth][error]: ", sendErr)
 			}
 
 		} else {
 			sendErr := c.SendRaw("<failure xmlns='urn:ietf:params:xml:ns:xmpp-sasl'><not-authorized/></failure>")
 			if sendErr != nil {
-				log.Println("[st][TLSAuth][ERROR]: ", sendErr)
+				log.Println("[st][TLSAuth][error]: ", sendErr)
 			}
 		}
 	default:
@@ -250,12 +260,12 @@ func (state *Auth) Process(c *Connection, client *Client, s *Server) (State, *Co
 			client.localPart = info[1]
 			sendErr := c.SendRaw("<success xmlns='urn:ietf:params:xml:ns:xmpp-sasl'/>")
 			if sendErr != nil {
-				log.Println("[st][Auth][ERROR]: ", sendErr)
+				log.Println("[st][Auth][error]: ", sendErr)
 			}
 		} else {
 			sendErr := c.SendRaw("<failure xmlns='urn:ietf:params:xml:ns:xmpp-sasl'><not-authorized/></failure>")
 			if sendErr != nil {
-				log.Println("[st][Auth][ERROR]: ", sendErr)
+				log.Println("[st][Auth][error]: ", sendErr)
 			}
 			return nil, c, errors.New("client not authorized")
 		}
@@ -287,7 +297,7 @@ func (state *AuthedStart) Process(c *Connection, client *Client, s *Server) (Sta
 
 	sendErr := c.SendRawf("<?xml version='1.0'?><stream:stream id='%x' version='1.0' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams'>", createCookie())
 	if sendErr != nil {
-		log.Println("[st][AuthedStart][ERROR]: ", sendErr)
+		log.Println("[st][AuthedStart][error]: ", sendErr)
 	}
 
 	// org
@@ -303,7 +313,7 @@ func (state *AuthedStart) Process(c *Connection, client *Client, s *Server) (Sta
 	sendErr = c.SendRaw("<stream:features><bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'/>" +
 		"<keepalive xmlns='urn:xmpp:keepalive:0'><interval min='30' max='300'/></keepalive></stream:features>")
 	if sendErr != nil {
-		log.Println("[st][AuthedStart][ERROR]: ", sendErr)
+		log.Println("[st][AuthedStart][error]: ", sendErr)
 	}
 
 	return state.Next, c, nil
@@ -360,20 +370,13 @@ func (state *AuthedStream) Process(c *Connection, client *Client, s *Server) (St
 		client.jid = client.localPart + "@" + client.domainPart + "/" + client.resourcePart
 		sendErr := c.SendRawf("<iq id='%s' type='result'><bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'><jid>%s</jid></bind></iq>", v.ID, client.jid)
 		if sendErr != nil {
-			log.Println("[st][AuthedStream][ERROR]: ", sendErr)
+			log.Println("[st][AuthedStream][error]: ", sendErr)
 		}
-		s.ConnectBus <- Connect{Jid: client.jid, Receiver: client.messages}
+		s.ConnectBus <- Connect{Jid: client.jid,LocalPart: client.localPart, Receiver: client.messages}
 
-		// create and start client heartbeat
-		// client.heartbeat = keepalive.New(20, 2)
-		// go client.heartbeat.Start()
-		addTime := time.Second * time.Duration(s.HeartbeatInterval*s.HeartbeatMaxCount)
-		timeDeadline := time.Now().Add(addTime)
-		setDeadlineErr := c.Raw.SetReadDeadline(timeDeadline)
-		if setDeadlineErr != nil {
-			log.Println("[st][AuthedStream] err: ", setDeadlineErr)
-		} else {
-			log.Printf("[st][AuthedStream] %v(%v) setReadDeadline: %v", client.jid, addTime, timeDeadline)
+		// create and set client's socket deadline
+		if s.DeadlineEnable {
+			setDeadline(s.DeadlineInterval, s.DeadlineMaxCount, &c.Raw, client.jid)
 		}
 
 	default:
@@ -401,7 +404,7 @@ func (state *Normal) Process(c *Connection, client *Client, s *Server) (State, *
 			log.Println("[st][Normal] wait client next...")
 			ex, nextErr := c.NextExt()
 			if nextErr != nil {
-				log.Printf("[st][Normal][ERROR] err: %v\n", nextErr.Error())
+				log.Printf("[st][Normal][error] err: %v\n", nextErr.Error())
 				errors <- nextErr
 				done <- true
 				return
@@ -425,15 +428,9 @@ func (state *Normal) Process(c *Connection, client *Client, s *Server) (State, *
 						msg := fmt.Sprintf("<iq from='%v' to='%v' id='c2s1' type='result'/>", parsed.To, parsed.From)
 						client.messages <- msg
 
-						// client is Beating
-						// from.heartbeat.Beating()
-						addTime := time.Second * time.Duration(s.HeartbeatInterval*s.HeartbeatMaxCount)
-						timeDeadline := time.Now().Add(addTime)
-						setDeadlineErr := c.Raw.SetReadDeadline(timeDeadline)
-						if setDeadlineErr != nil {
-							log.Println("[st][Normal] err: ", setDeadlineErr)
-						} else {
-							log.Printf("[st][Normal] %v(%v) setReadDeadline: %v", client.jid, addTime, timeDeadline)
+						if s.DeadlineEnable {
+							// set Deadline
+							setDeadline(s.DeadlineInterval, s.DeadlineMaxCount, &c.Raw, client.jid)
 						}
 					}
 				}
@@ -449,14 +446,10 @@ func (state *Normal) Process(c *Connection, client *Client, s *Server) (State, *
 				switch string(data) {
 				case " ", "\t", "\r", "\n": //TODO: consider more than one whitespace
 					log.Println("[st][Normal] received whitespace ping")
-					// client.heartbeat.Beating()
-					addTime := time.Second * time.Duration(s.HeartbeatInterval*s.HeartbeatMaxCount)
-					timeDeadline := time.Now().Add(addTime)
-					setDeadlineErr := c.Raw.SetReadDeadline(timeDeadline)
-					if setDeadlineErr != nil {
-						log.Println("[st][Normal] err: ", setDeadlineErr)
-					} else {
-						log.Printf("[st][Normal] %v(%v) setReadDeadline: %v", client.jid, addTime, timeDeadline)
+
+					if s.DeadlineEnable {
+						// set Deadline
+						setDeadline(s.DeadlineInterval, s.DeadlineMaxCount, &c.Raw, client.jid)
 					}
 				}
 			}
@@ -483,20 +476,23 @@ func (state *Normal) Process(c *Connection, client *Client, s *Server) (State, *
 
 		case <-nextReadDone:
 			log.Println("[st][Normal] <- nextReadDone")
-			// readDone, client stop checking heartbeat.
-			// client.heartbeat.Stop()
 			return nil, c, nil
 
 		case connErr := <-nextReadErr:
 			//s.Log.Error(fmt.Sprintf("Connection Error: %s", err.Error()))
 			log.Printf("[st][Normal] nextRead Error: %v\n", connErr.Error())
-
-			// case <-client.heartbeat.IsStop:
-
-			// 	// client heart stopped. disconnect device.
-			// 	log.Printf("[st][Normal] %v: heartbeatIsStop\n", client.jid)
-			// 	client.heartbeat.Stop()
-			// 	return nil, c, nil
 		}
+	}
+}
+
+// setDeadline set client's socket deadline
+func setDeadline(sec, count int, conn *net.Conn, jid string) {
+	addTime := time.Second * time.Duration(sec * count)
+	timeDeadline := time.Now().Add(addTime)
+	setDeadlineErr := (*conn).SetReadDeadline(timeDeadline)
+	if setDeadlineErr != nil {
+		log.Println("[st][hb] err: ", setDeadlineErr)
+	} else {
+		log.Printf("[st][hb] %v(%v) setReadDeadline: %v", jid, addTime, timeDeadline)
 	}
 }

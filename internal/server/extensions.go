@@ -65,10 +65,6 @@ func (e *RosterExtension) Process(message interface{}, from *Client) {
 		// 	msg := fmt.Sprintf("<iq from='%v' to='%v' id='c2s1' type='result'/>", parsed.To, parsed.From)
 		// 	from.messages <- msg
 
-		// 	// client is Beating
-		// 	// from.heartbeat.Beating()
-		// }
-
 		if string(parsed.Query) == "<query xmlns='jabber:iq:roster'/>" {
 			// respond with roster
 			roster, _ := e.Accounts.OnlineRoster(from.jid)

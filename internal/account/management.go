@@ -4,6 +4,7 @@ import (
 	"log"
 	"sync"
 	"xmpp/internal/pkg/logger"
+	"xmpp/internal/pkg/memstore"
 	"xmpp/internal/server"
 )
 
@@ -14,55 +15,56 @@ type AdminUser struct {
 	//Command  chan<- interface{}
 }
 
-// Online Heartbeat
-type Online struct {
-	Receiver map[string]chan<- interface{}
-	// Heartbeat
-	HeartBeatNumberOfDelay int
-}
 
 // Management Inject account management into xmpp library
 type Management struct {
 	AdminUser AdminUser
+	SkipPassword bool
 	//Users     map[string]string
 	Online map[string]chan<- interface{}
 	Mutex  *sync.Mutex
 	Log    logger.Logger
 
-	// Heartbeat
-	//HeartBeatMaxNumberOfDelay int // Default 3
-	//HeartbeatRateIntervalSeconds int // Default 35
+	// redis
+	UseRedis bool
+	Redis memstore.Redis
 }
 
-func (a Management) Authenticate(username, password string) (success bool, err error) {
-	//a.log.Info("start authenticate")
+func (m Management) Authenticate(username, password string) (success bool, err error) {
+	//m.log.Info("start authenticate")
 	log.Println("[am] start authenticate")
 
-	//a.log.Info(fmt.Sprintf("authenticate: %s", username))
+	//m.log.Info(fmt.Sprintf("authenticate: %s", username))
 	log.Printf("[am] authenticate name: %s\n", username)
 	log.Printf("[am] authenticate password: %s\n", password)
 
-	//if _, ok := a.Users[username]; ok {
+	if m.SkipPassword {
+		log.Println("[am] skip password true!!! authenticate success")
+		success = true
+		return
+	}
+
+	//if _, ok := m.Users[username]; ok {
 	// Already created user(client)
-	if a.AdminUser.Password == password {
+	if m.AdminUser.Password == password {
 		//Continue the current state.
-		//a.log.Debug("auth success")
+		//m.log.Debug("auth success")
 		log.Println("[am] authenticate success")
 		success = true
 	} else {
-		//a.Mutex.Lock()
-		//defer a.Mutex.Unlock()
+		//m.Mutex.Lock()
+		//defer m.Mutex.Unlock()
 
 		//Auth fail, delete user.
-		//a.DeleteAccount(username)
+		//m.DeleteAccount(username)
 
-		//a.log.Debug("auth fail")
+		//m.log.Debug("auth fail")
 		log.Println("[am] authenticate fail")
 		success = false
 	}
 	//} else {
 	//	log.Println("[am] >>>> new username")
-	//	success, err = a.CreateAccount(username, password)
+	//	success, err = m.CreateAccount(username, password)
 	//}
 	return
 }
@@ -92,28 +94,28 @@ func (a Management) Authenticate(username, password string) (success bool, err e
 //	delete(a.Users, username)
 //}
 
-func (a Management) OnlineRoster(jid string) (online []string, err error) {
-	a.Mutex.Lock()
-	defer a.Mutex.Unlock()
+func (m Management) OnlineRoster(jid string) (online []string, err error) {
+	m.Mutex.Lock()
+	defer m.Mutex.Unlock()
 
-	//a.log.Info(fmt.Sprintf("retrieving roster: %s", jid))
+	//m.log.Info(fmt.Sprintf("retrieving roster: %s", jid))
 	log.Printf("[am] retrieving roster: %v\n", jid)
 
-	for person := range a.Online {
+	for person := range m.Online {
 		online = append(online, person)
 	}
 	return
 }
 
 // PresenceRoutine new WIP func for presence messages
-func (a Management) PresenceRoutine(bus <-chan server.Message) {
+func (m Management) PresenceRoutine(bus <-chan server.Message) {
 	log.Println("[am] new presence routine")
 
 	for {
 		message := <-bus
-		a.Mutex.Lock()
+		m.Mutex.Lock()
 		//message.To
-		for jid, userChannel := range a.Online {
+		for jid, userChannel := range m.Online {
 			log.Println("[am] jid: ", jid)
 			if userChannel != nil {
 				userChannel <- message.Data
@@ -121,63 +123,63 @@ func (a Management) PresenceRoutine(bus <-chan server.Message) {
 				log.Println("[am] user channel is nil")
 			}
 		}
-		a.Mutex.Unlock()
+		m.Mutex.Unlock()
 	}
 }
 
-func (a Management) RouteRoutine(bus <-chan server.Message) {
+func (m Management) RouteRoutine(bus <-chan server.Message) {
 	var channel chan<- interface{}
 	var ok bool
 
 	log.Println("[am] new route routine")
 	for {
 		message := <-bus
-		a.Mutex.Lock()
+		m.Mutex.Lock()
 
-		if channel, ok = a.Online[message.To]; ok {
+		if channel, ok = m.Online[message.To]; ok {
 			channel <- message.Data
 		}
 
-		a.Mutex.Unlock()
+		m.Mutex.Unlock()
 	}
 }
 
-func (a Management) ConnectRoutine(bus <-chan server.Connect) {
+func (m Management) ConnectRoutine(bus <-chan server.Connect) {
 	log.Println("[am] new connect routine")
 	for {
 		message := <-bus
-		a.Mutex.Lock()
+		m.Mutex.Lock()
 
-		//a.log.Info(fmt.Sprintf("[am] %s connected", message.Jid))
+		//m.log.Info(fmt.Sprintf("[am] %s connected", message.Jid))
 		log.Printf("[am] %v connected\n", message.Jid)
-		a.Online[message.Jid] = message.Receiver
+		m.Online[message.Jid] = message.Receiver
 
-		a.Mutex.Unlock()
+		m.Mutex.Unlock()
+
+		// TODO: Redis Set Or Update Online
+		key := message.LocalPart
+		val := "xmpp-broker-01"
+		m.saveOnline(key, val)
+
+		// TODO: Push Event
 	}
 }
 
-func (a Management) DisconnectRoutine(bus <-chan server.Disconnect) {
+func (m Management) DisconnectRoutine(bus <-chan server.Disconnect) {
 	log.Println("[am] new disconnect routine")
 	for {
 		message := <-bus
-		a.Mutex.Lock()
+		m.Mutex.Lock()
 
-		//a.log.Info(fmt.Sprintf("[am] %s disconnected", message.Jid))
+		//m.log.Info(fmt.Sprintf("[am] %s disconnected", message.Jid))
 		log.Printf("[am] %v disconnected\n", message.Jid)
-		delete(a.Online, message.Jid)
-		a.Mutex.Unlock()
+		delete(m.Online, message.Jid)
+		m.Mutex.Unlock()
+
+		// TODO: Redis Set Or Update Offline
+		key := message.LocalPart
+		m.saveOffline(key)
+
+		// TODO: Push Event
 	}
 }
-
-//func (a Management) KeepAliveRoutine(bus <-chan server.KeepAlive) {
-//	log.Println("[am] new Keep Alive routine")
-//	for {
-//		message := <-bus
-//		a.Mutex.Lock()
-//
-//		//a.log.Info(fmt.Sprintf("[am] %s disconnected", message.Jid))
-//		log.Printf("[am] %v disconnected\n", message.Jid)
-//		delete(a.Online, message.Jid)
-//		a.Mutex.Unlock()
-//	}
-//}

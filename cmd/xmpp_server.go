@@ -2,8 +2,10 @@ package main
 
 import (
 	"log"
+	"runtime"
 	"xmpp/internal/account"
 	"xmpp/internal/pkg/logger"
+	"xmpp/internal/pkg/memstore"
 	"xmpp/internal/server"
 
 	"crypto/tls"
@@ -21,28 +23,60 @@ func main() {
 	// l.Info("starting server")
 	log.Println("[ms] starting server")
 
+	runtime.GOMAXPROCS(runtime.NumCPU())
+	log.Println("[ms] CPU PROCS: ", runtime.GOMAXPROCS(0))
+
 	// define env value
 	envPort := 5222
 	envLogLevel := logger.DebugLevel
 	envSkipTLS := true
 	envDomain := "localhost"
+
+	envDeadlineEnable := false
+	envDeadlineInterval := 30
+	envDeadlineMaxCount := 3
+
 	envSelfXmppClient := "selfXmppClient"
 	envSelfXmppClientPassword := "test1234"
 	envSelfXMppClientResource := "XMPPConn1"
-	envHeartbeatInterval := 30
-	envHeartbeatMaxCount := 3
+
+	 envSkipPassword:= true
+
+	envUseRedis := true
+	envRedisConfHost := "localhost"
+	envRedisConfPort := 6379
+	envRedisConfPassword := ""
+	envRedisConfPool := 10000
+	envRedisConfTimeout := 0
+	envRedisConfClusters := ""
+	// Redis
+
 
 	// l.Info("listening on localhost:" + fmt.Sprintf("%d", *portPtr))
-	log.Println("====== env values ======")
+	log.Println("======== env values ========")
+
 	log.Printf("[ms] listening on localhost: %v\n", envPort)
 	log.Printf("[ms] debug level: %v\n", envLogLevel)
 	log.Printf("[ms] skip tls: %v\n", envSkipTLS)
 	log.Printf("[ms] domain: %v\n", envDomain)
+
+	log.Printf("[ms] deadline enable: %v\n", envDeadlineEnable)
+	log.Printf("[ms] deadline Interval: %v\n", envDeadlineInterval)
+	log.Printf("[ms] deadline MaxcCount: %v\n", envDeadlineMaxCount)
+
 	log.Printf("[ms] admin client: %v\n", envSelfXmppClient)
 	log.Printf("[ms] admin password: %v\n", envSelfXmppClientPassword)
 	log.Printf("[ms] admin resource: %v\n", envSelfXMppClientResource)
-	log.Printf("[ms] Heartbeat Interval: %v\n", envHeartbeatInterval)
-	log.Printf("[ms] Heartbeat MaxcCount: %v\n", envHeartbeatMaxCount)
+	log.Printf("[ms] Skip Password: %v\n", envSkipPassword)
+
+	log.Printf("[ms] ues redis: %v\n", envUseRedis)
+	log.Printf("[ms] redis conf host: %v\n", envRedisConfHost)
+	log.Printf("[ms] redis conf port: %v\n", envRedisConfPort)
+	log.Printf("[ms] redis conf password: %v\n", envRedisConfPassword)
+	log.Printf("[ms] redis conf pool: %v\n", envRedisConfPool)
+	log.Printf("[ms] redis conf timeout: %v\n", envRedisConfTimeout)
+	log.Printf("[ms] redis conf cluster: %v\n", envRedisConfClusters)
+
 	log.Println("==============================")
 	// portPtr := flag.Int("port", envPort, "port number to listen on")
 	// logLevelPtr := flag.Int("loggerLevel", envLogLevel, "set level logging")
@@ -67,7 +101,19 @@ func main() {
 	var connectBus = make(chan server.Connect)
 	var disconnectBus = make(chan server.Disconnect)
 
-	var am = account.Management{AdminUser: adminUser /*Users: registered,*/, Online: activeUsers, Log: l, Mutex: &sync.Mutex{}}
+	var am = account.Management{AdminUser: adminUser, SkipPassword: envSkipPassword/*Users: registered,*/, Online: activeUsers, Log: l, Mutex: &sync.Mutex{}, UseRedis: envUseRedis}
+	if am.UseRedis {
+		log.Println("[ms] account management use redis enable")
+		conf := &memstore.Config{
+			Timeout:  envRedisConfTimeout,
+			Pool:     envRedisConfPool,
+			Password: envRedisConfPassword,
+			Clusters: envRedisConfClusters,
+		}
+		conf.Address.Host = envRedisConfHost
+		conf.Address.Port = envRedisConfPort
+		am.Redis = memstore.NewClient(conf)
+	}
 
 	var cert, _ = tls.LoadX509KeyPair("./cert.pem", "./key.pem")
 	var tlsConfig = tls.Config{
@@ -96,21 +142,26 @@ func main() {
 		Domain:        envDomain,
 		TLSConfig:     &tlsConfig,
 
-		// Heartbeat
-		HeartbeatInterval: envHeartbeatInterval,
-		HeartbeatMaxCount: envHeartbeatMaxCount,
+		// Deadline option
+		DeadlineEnable:   envDeadlineEnable,
+		DeadlineInterval: envDeadlineInterval,
+		DeadlineMaxCount: envDeadlineMaxCount,
 	}
 
 	// Listen for incoming connections.
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", envPort))
 	if err != nil {
-		l.Error(fmt.Sprintf("[ms][error] could not listen for connections: %s", err.Error()))
+		//l.Error(fmt.Sprintf("[ms][error] could not listen for connections: %s", err.Error()))
+		log.Printf("[ms][error] could not listen for connections: %v", err)
 		os.Exit(1)
 	}
+	// defer close listen struct
 	defer func() {
 		closeErr := listener.Close()
 		if closeErr != nil {
-			log.Println("[ms][error] listener close: ", closeErr)
+			log.Println("[ms][error] close listener : ", closeErr)
+		} else {
+			log.Println("[ms] close listener")
 		}
 	}()
 
@@ -119,7 +170,6 @@ func main() {
 	go am.ConnectRoutine(connectBus)
 	go am.DisconnectRoutine(disconnectBus)
 	go am.PresenceRoutine(presenceBus)
-	//go am.KeepAliveRoutine(keepAliveBus)
 
 	// Handle each connection.
 	log.Println("[ms] start client connection routine...")

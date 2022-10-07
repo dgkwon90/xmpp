@@ -19,7 +19,6 @@ type Client struct {
 	domainPart   string
 	resourcePart string
 	messages     chan interface{}
-	//heartbeat    *keepalive.Heartbeat
 }
 
 // AccountManager performs roster management and authentication
@@ -66,12 +65,15 @@ type Server struct {
 	// Injectable logging interface
 	Log Logging
 
-	// Heartbeat
-	// Heartbeat Interval
-	HeartbeatInterval int
+	// Deadline
+	// Deadline Enable
+	DeadlineEnable bool
 
-	// Heartbeat MaxCount
-	HeartbeatMaxCount int
+	// Deadline Interval
+	DeadlineInterval int
+
+	// Deadline MaxCount
+	DeadlineMaxCount int
 }
 
 // Message is a generic XMPP message to send to the To Jid
@@ -83,27 +85,35 @@ type Message struct {
 // Connect holds a channel where the server can send messages to the specific Jid
 type Connect struct {
 	Jid      string
+	LocalPart string
 	Receiver chan<- interface{}
 }
 
 // Disconnect notifies when a jid disconnects
 type Disconnect struct {
 	Jid string
+	LocalPart string
+	Reason string // Case1: The network was disconnected due to timeout due to client non-response.
+				  // Case2: A network closed by the client.
 }
 
 // TCPAnswer sends connection through the TSLStateMachine
 func (s *Server) TCPAnswer(conn net.Conn) {
 	log.Printf("\n\n")
 	log.Println("[x] client connection")
+
+	// defer close conn struct
 	defer func() {
 		closeErr := conn.Close()
 		if closeErr != nil {
-			log.Println("[x][ERROR] network connection close : ", closeErr)
+			log.Println("[x][error] close conn: ", closeErr)
+		} else {
+			log.Println("[x] close conn")
 		}
 	}()
 
-	log.Printf("[x] Accepting TCP connection from: %v\n", conn.RemoteAddr())
-	log.Printf("[x] connection LocalAddr: %v\n", conn.LocalAddr())
+	log.Printf("[x] accepting tcp connection from: %v\n", conn.RemoteAddr())
+	log.Printf("[x] connection localAddr: %v\n", conn.LocalAddr())
 
 	state := NewTLSStateMachine(s.SkipTLS)
 
@@ -111,24 +121,35 @@ func (s *Server) TCPAnswer(conn net.Conn) {
 	client := &Client{
 		messages: make(chan interface{}),
 	}
+	// defer close client message chan
 	defer close(client.messages)
 
-	clientConnection := NewConn(conn, MessageTypes)
+	clientConn := NewConn(conn, MessageTypes)
 	for {
+
 		var err error
-		state, clientConnection, err = state.Process(clientConnection, client, s)
+		state, clientConn, err = state.Process(clientConn, client, s)
 		//s.Log.Debug(fmt.Sprintf("[state] %s", state))
 
 		if err != nil {
 			//s.Log.Error(fmt.Sprintf("[%s] State Error: %s", client.jid, err.Error()))
-			log.Printf("[x][%v] State Error: %v\n", client.jid, err.Error())
+			log.Printf("[x][%v] state error: %v\n", client.jid, err.Error())
+
+			// state is normal, client conn disconnect
+			switch state.(type){
+			case *Normal:
+				log.Printf("[x] client conn disconnect :  %v\n", client.jid)
+				s.DisconnectBus <- Disconnect{Jid: client.jid, LocalPart: client.localPart}
+			}
 			return
 		}
 		if state == nil {
 			//s.Log.Info(fmt.Sprintf("Client Disconnected: %s", client.jid))
-			log.Printf("[x] Client Disconnected:  %v\n", client.jid)
-			s.DisconnectBus <- Disconnect{Jid: client.jid}
+			log.Println("[x] state is nil")
+			log.Printf("[x] client conn disconnect :  %v\n", client.jid)
+			s.DisconnectBus <- Disconnect{Jid: client.jid, LocalPart: client.localPart}
 			return
 		}
+
 	}
 }

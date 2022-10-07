@@ -29,7 +29,7 @@ func (l Logger) Error(format string, args ...interface{}) {
 	// if l.Level >= ErrorLevel {
 	// 	_, fullFilePath, line, _ := runtime.Caller(1)
 	// 	file := fileName(fullFilePath)
-	// 	log.Printf("[ERROR] "+file+":"+strconv.Itoa(line)+": "+format, args...)
+	// 	log.Printf("[error] "+file+":"+strconv.Itoa(line)+": "+format, args...)
 	// }
 }
 

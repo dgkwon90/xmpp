@@ -19,7 +19,7 @@ type Connection struct {
 
 // NewConn creates a Connection struct for a given net.Conn and message system
 func NewConn(raw net.Conn, MessageTypes map[xml.Name]reflect.Type) *Connection {
-	log.Println("[c] NewConn")
+	log.Println("[c] NewConn: raw is net.Conn")
 	conn := &Connection{
 		Raw:          raw,
 		MessageTypes: MessageTypes,
@@ -40,6 +40,8 @@ func (c *Connection) Next() (xml.StartElement, error) {
 		switch token := nextToken.(type) {
 		case xml.StartElement:
 			return token, nil
+		default:
+			log.Println("not found token")
 		}
 	}
 }
@@ -57,7 +59,6 @@ func (c *Connection) NextExt() (interface{}, error) {
 			return token, nil
 
 		case xml.CharData:
-			log.Printf("xmpp: received xml char %v", token)
 			return token, nil
 		}
 	}
