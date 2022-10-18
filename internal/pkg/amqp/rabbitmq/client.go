@@ -26,6 +26,7 @@ var (
 )
 
 type Client struct {
+	name string
 	queueName       string
 	connection      *amqp.Connection
 	channel         *amqp.Channel
@@ -38,9 +39,10 @@ type Client struct {
 
 // New creates a new consumer state instance, and automatically
 // attempts to connect to the server.
-func New(queueName, addr string) *Client {
+func New(name, queueName, addr string) *Client {
 	client := Client{
 		//logger:    log.New(os.Stdout, "", log.LstdFlags),
+		name: name,
 		queueName: queueName,
 		done:      make(chan bool),
 	}
@@ -174,12 +176,12 @@ func (client *Client) changeChannel(channel *amqp.Channel) {
 // it continuously re-sends messages until a confirm is received.
 // This will block until the server sends a confirm. Errors are
 // only returned if the push action itself fails, see UnsafePush.
-func (client *Client) Push(data []byte) error {
+func (client *Client) Push(exchangeName, routingKey string, mandatory, immediate bool, pubMsg amqp.Publishing) error {
 	if !client.isReady {
 		return errors.New("failed to push: not connected")
 	}
 	for {
-		err := client.UnsafePush(data)
+		err := client.UnsafePush(exchangeName, routingKey, mandatory, immediate, pubMsg)
 		if err != nil {
 			log.Printf("Push failed. Retrying...: %v", err)
 			select {
@@ -205,7 +207,7 @@ func (client *Client) Push(data []byte) error {
 // confirmation. It returns an error if it fails to connect.
 // No guarantees are provided for whether the server will
 // receive the message.
-func (client *Client) UnsafePush(data []byte) error {
+func (client *Client) UnsafePush(exchangeName string, routingKey string, mandatory, immediate bool, pubMsg amqp.Publishing) error {
 	if !client.isReady {
 		return errNotConnected
 	}
@@ -213,16 +215,18 @@ func (client *Client) UnsafePush(data []byte) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// if routingKey is nil, set client queueName
+	if len(routingKey) <= 0 {
+		routingKey = client.queueName
+	}
+
 	return client.channel.PublishWithContext(
-		ctx,
-		"",               // Exchange
-		client.queueName, // Routing key
-		false,            // Mandatory
-		false,            // Immediate
-		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        data,
-		},
+		ctx, //context
+		exchangeName,               // Exchange
+		routingKey, // Routing key
+		mandatory,            // Mandatory
+		immediate,            // Immediate
+		pubMsg,				// Message
 	)
 }
 
@@ -236,7 +240,7 @@ func (client *Client) Consume() (<-chan amqp.Delivery, error) {
 	}
 	return client.channel.Consume(
 		client.queueName,
-		"",    // Consumer
+		client.name,    // Consumer
 		false, // Auto-Ack
 		false, // Exclusive
 		false, // No-local
