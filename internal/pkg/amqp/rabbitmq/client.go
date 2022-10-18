@@ -1,4 +1,4 @@
-package client
+package rabbitmq
 
 import (
 	"context"
@@ -11,12 +11,12 @@ import (
 )
 
 const (
-	// When reconnecting to the server after connection failure
-	reconnectDelay = 5 * time.Second
-	// When setting up the channel after a channel exception
-	reInitDelay = 2 * time.Second
-	// When resending messages the server didn't confirm
-	resendDelay = 5 * time.Second
+	// ReconnectDelay When reconnecting to the server after connection failure
+	ReconnectDelay = 5 * time.Second
+	// ReInitDelay When setting up the channel after a channel exception
+	ReInitDelay = 2 * time.Second
+	// ResendDelay When resending messages the server didn't confirm
+	ResendDelay = 5 * time.Second
 )
 
 var (
@@ -26,7 +26,7 @@ var (
 )
 
 type Client struct {
-	name string
+	name            string
 	queueName       string
 	connection      *amqp.Connection
 	channel         *amqp.Channel
@@ -39,10 +39,10 @@ type Client struct {
 
 // New creates a new consumer state instance, and automatically
 // attempts to connect to the server.
-func New(name, queueName, addr string) *Client {
+func NewClient(name, queueName, addr string) *Client {
 	client := Client{
 		//logger:    log.New(os.Stdout, "", log.LstdFlags),
-		name: name,
+		name:      name,
 		queueName: queueName,
 		done:      make(chan bool),
 	}
@@ -50,20 +50,53 @@ func New(name, queueName, addr string) *Client {
 	return &client
 }
 
+func (client *Client) IsReady() bool {
+	return client.isReady
+}
+
+func (client *Client) ExchangeDeclare(exchange, exchangeType string) error {
+	exchangeDeclareErr := client.channel.ExchangeDeclare(
+		exchange,     // name
+		exchangeType, // type
+		false,        // durable
+		false,        // auto-deleted
+		false,        // internal
+		false,        // no-wait
+		nil,          // arguments
+	)
+	if exchangeDeclareErr != nil {
+		return exchangeDeclareErr
+	}
+	return nil
+}
+
+func (client *Client) QueueBind(exchange, routingKey string) error {
+	queueBindErr := client.channel.QueueBind(
+		client.queueName, // queue name
+		routingKey,       // routing key
+		exchange,         // exchange
+		false,            // no-waite
+		nil,              // arguments
+	)
+	if queueBindErr != nil {
+		return queueBindErr
+	}
+	return nil
+}
+
 // handleReconnect will wait for a connection error on
 // notifyConnClose, and then continuously attempt to reconnect.
 func (client *Client) handleReconnect(addr string) {
 	for {
 		client.isReady = false
-		log.Printf("Attempting to connect %v", addr)
+		log.Printf("Attempting to connect: %v", addr)
 		conn, err := client.connect(addr)
 		if err != nil {
 			log.Printf("Failed to connect. Retrying...: %v", err)
-
 			select {
 			case <-client.done:
 				return
-			case <-time.After(reconnectDelay):
+			case <-time.After(ReconnectDelay):
 			}
 			continue
 		}
@@ -101,7 +134,7 @@ func (client *Client) handleReInit(conn *amqp.Connection) bool {
 			select {
 			case <-client.done:
 				return true
-			case <-time.After(reInitDelay):
+			case <-time.After(ReInitDelay):
 			}
 			continue
 		}
@@ -121,26 +154,24 @@ func (client *Client) handleReInit(conn *amqp.Connection) bool {
 // init will initialize channel & declare queue
 func (client *Client) init(conn *amqp.Connection) error {
 	ch, err := conn.Channel()
-
 	if err != nil {
 		return err
 	}
 
 	err = ch.Confirm(false)
-
 	if err != nil {
 		log.Println(err)
 		return err
 	}
-	_, err = ch.QueueDeclare(
-		client.queueName,
-		false, // Durable
-		false, // Delete when unused
-		false, // Exclusive
-		false, // No-wait
-		nil,   // Arguments
-	)
 
+	_, err = ch.QueueDeclare(
+		client.queueName, // Name
+		false,            // Durable
+		false,            // Delete when unused
+		false,            // Exclusive
+		false,            // No-wait
+		nil,              // Arguments
+	)
 	if err != nil {
 		log.Println(err)
 		return err
@@ -187,7 +218,7 @@ func (client *Client) Push(exchangeName, routingKey string, mandatory, immediate
 			select {
 			case <-client.done:
 				return errShutdown
-			case <-time.After(resendDelay):
+			case <-time.After(ResendDelay):
 			}
 			continue
 		}
@@ -197,7 +228,7 @@ func (client *Client) Push(exchangeName, routingKey string, mandatory, immediate
 				log.Println("Push confirmed!")
 				return nil
 			}
-		case <-time.After(resendDelay):
+		case <-time.After(ResendDelay):
 		}
 		log.Println("Push didn't confirm. Retrying...")
 	}
@@ -221,12 +252,12 @@ func (client *Client) UnsafePush(exchangeName string, routingKey string, mandato
 	}
 
 	return client.channel.PublishWithContext(
-		ctx, //context
-		exchangeName,               // Exchange
-		routingKey, // Routing key
-		mandatory,            // Mandatory
-		immediate,            // Immediate
-		pubMsg,				// Message
+		ctx,          //context
+		exchangeName, // Exchange
+		routingKey,   // Routing key
+		mandatory,    // Mandatory
+		immediate,    // Immediate
+		pubMsg,       // Message
 	)
 }
 
@@ -240,12 +271,12 @@ func (client *Client) Consume() (<-chan amqp.Delivery, error) {
 	}
 	return client.channel.Consume(
 		client.queueName,
-		client.name,    // Consumer
-		false, // Auto-Ack
-		false, // Exclusive
-		false, // No-local
-		false, // No-Wait
-		nil,   // Args
+		client.name, // Consumer
+		false,       // Auto-Ack
+		false,       // Exclusive
+		false,       // No-local
+		false,       // No-Wait
+		nil,         // Args
 	)
 }
 

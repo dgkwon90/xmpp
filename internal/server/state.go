@@ -58,7 +58,9 @@ func (state *Start) Process(c *Connection, client *Client, s *Server) (State, *C
 	log.Println("[st][Start] Read Start element:", se)
 
 	// TODO: check that se is a stream
-	sendErr := c.SendRawf("<?xml version='1.0'?><stream:stream id='%x' version='1.0' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams'>", createCookie())
+	//ORG
+	//sendErr := c.SendRawf("<?xml version='1.0'?><stream:stream id='%x' version='1.0' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams'>", createCookie())
+	sendErr := c.SendRawf("<?xml version='1.0'?><stream:stream id='%x' version='1.0' xml:lang='en' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams' form='%s'>", createCookie(), s.Domain)
 	if sendErr != nil {
 		log.Println("[st][Start][error]", sendErr)
 	}
@@ -74,6 +76,9 @@ func (state *Start) Process(c *Connection, client *Client, s *Server) (State, *C
 		}
 	} else {
 		log.Println("TLS")
+		// org
+		//sendErr = c.SendRaw("<stream:features><starttls xmlns='urn:ietf:params:xml:ns:xmpp-tls'><required/></starttls></stream:features>")
+
 		sendErr = c.SendRaw("<stream:features><starttls xmlns='urn:ietf:params:xml:ns:xmpp-tls'><required/></starttls></stream:features>")
 		if sendErr != nil {
 			log.Println("[st][Start][error]: ", sendErr)
@@ -93,10 +98,12 @@ func (state *TLSUpgradeRequest) Process(c *Connection, client *Client, s *Server
 	defer log.Printf("[st][TLSUpgradeRequest] End Process >>>>>\n\n")
 
 	log.Println("[st][TLSUpgradeRequest] wait client next...")
-	_, err := c.Next()
+	se, err := c.Next()
 	if err != nil {
 		return nil, c, err
 	}
+
+	log.Printf("[st][TLSUpgradeRequest] StartElement: %v", se)
 	// TODO: ensure urn:ietf:params:xml:ns:xmpp-tls
 	return state.Next, c, nil
 }
@@ -113,7 +120,7 @@ func (state *TLSUpgrade) Process(c *Connection, client *Client, s *Server) (Stat
 
 	sendErr := c.SendRaw("<proceed xmlns='urn:ietf:params:xml:ns:xmpp-tls'/>")
 	if sendErr != nil {
-		log.Println("[st][error]: ", sendErr)
+		log.Println("[st][TLSUpgrade][error]: ", sendErr)
 	}
 
 	// perform the TLS handshake
@@ -138,18 +145,23 @@ func (state *TLSStartStream) Process(c *Connection, client *Client, s *Server) (
 	defer log.Printf("[st][TLSStartStream] End Process >>>>>\n\n")
 
 	log.Println("[st][TLSStartStream] wait client next...")
-	_, err := c.Next()
+	se, err := c.Next()
 	if err != nil {
 		return nil, c, err
 	}
+
+	log.Printf("[st][TLSStartStream] StartElement: %v", se)
+
 	// TODO: ensure check that se is a stream
-	sendErr := c.SendRawf("<?xml version='1.0'?><stream:stream id='%x' version='1.0' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams'>", createCookie())
+	//ORG
+	//sendErr := c.SendRawf("<?xml version='1.0'?><stream:stream id='%x' version='1.0' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams'>", createCookie())
+	sendErr := c.SendRawf("<?xml version='1.0'?><stream:stream id='%x' version='1.0' xml:lang='en' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams' form='%s'>", createCookie(), s.Domain)
 	if sendErr != nil {
-		log.Println("[st][error]: ", sendErr)
+		log.Println("[st][TLSStartStream][error]: ", sendErr)
 	}
 	sendErr = c.SendRaw("<stream:features><mechanisms xmlns='urn:ietf:params:xml:ns:xmpp-sasl'><mechanism>PLAIN</mechanism></mechanisms></stream:features>")
 	if sendErr != nil {
-		log.Println("[st][error]: ", sendErr)
+		log.Println("[st][TLSStartStream][error]: ", sendErr)
 	}
 	return state.Next, c, nil
 }
@@ -169,15 +181,20 @@ func (state *TLSAuth) Process(c *Connection, client *Client, s *Server) (State, 
 	if err != nil {
 		return nil, c, err
 	}
+
+	log.Printf("[st][TLSAuth] StartElement: %v", se)
 	// TODO: check what client sends, auth or register
 
 	// read the full auth stanza
-	_, val, err := c.Read(se)
+	name, val, err := c.Read(se)
 	if err != nil {
 		//s.Log.Error(errors.New("Unable to read auth stanza").Error())
 		log.Println("[st][TLSAuth]Unable to read auth stanza")
 		return nil, c, err
 	}
+
+	log.Printf("[st][TLSAuth] Auth read name: %v, val: %v \n", name, val)
+
 	switch v := val.(type) {
 	case *saslAuth:
 		data, decodeErr := base64.StdEncoding.DecodeString(v.Body)
@@ -372,7 +389,7 @@ func (state *AuthedStream) Process(c *Connection, client *Client, s *Server) (St
 		if sendErr != nil {
 			log.Println("[st][AuthedStream][error]: ", sendErr)
 		}
-		s.ConnectBus <- Connect{Jid: client.jid,LocalPart: client.localPart, Receiver: client.messages}
+		s.ConnectBus <- Connect{Jid: client.jid, LocalPart: client.localPart, Receiver: client.messages}
 
 		// create and set client's socket deadline
 		if s.DeadlineEnable {
@@ -423,7 +440,7 @@ func (state *Normal) Process(c *Connection, client *Client, s *Server) (State, *
 				if parsed, ok := val.(*ClientIQ); ok {
 					// Receive ping from client. *reference XEP-0199: XMPP Ping
 					if parsed.Type == "get" && parsed.ID == "c2s1" {
-						log.Println("[ex] receive ping")
+						log.Println("[st][Normal] receive ping")
 						// response pong message
 						msg := fmt.Sprintf("<iq from='%v' to='%v' id='c2s1' type='result'/>", parsed.To, parsed.From)
 						client.messages <- msg
@@ -435,6 +452,7 @@ func (state *Normal) Process(c *Connection, client *Client, s *Server) (State, *
 					}
 				}
 
+				// excute extensions
 				for _, extension := range s.Extensions {
 					extension.Process(val, client)
 				}
@@ -466,9 +484,18 @@ func (state *Normal) Process(c *Connection, client *Client, s *Server) (State, *
 				err = c.SendStanza(msg)
 
 			case string:
-				log.Println("[st][Normal] string type")
 				err = c.SendRaw(msg)
 
+			case ConnectionRequest:
+				log.Println("[st][Normal] ConnectionRequest type")
+				subMsg := "<iq id='cr001' type='get' xml:lang='en' from='" + msg.FromJid + "' to='" + msg.ToJid + "'>"
+				subMsg = subMsg + "<connectionRequest xmlns='urn:broadband-forum-org:cwmp:xmppConnReq-1-0'>"
+				subMsg = subMsg + "<username>" + msg.ToLocalPart + "</username>"
+				subMsg = subMsg + "<password>" + msg.Password + "</password>"
+				subMsg = subMsg + "</connectionRequest>"
+				subMsg = subMsg + "</iq>"
+				err = c.SendRawf(subMsg)
+				s.ConnectionRequestBus <- msg
 			}
 			if err != nil {
 				nextReadErr <- err
@@ -487,12 +514,12 @@ func (state *Normal) Process(c *Connection, client *Client, s *Server) (State, *
 
 // setDeadline set client's socket deadline
 func setDeadline(sec, count int, conn *net.Conn, jid string) {
-	addTime := time.Second * time.Duration(sec * count)
+	addTime := time.Second * time.Duration(sec*count)
 	timeDeadline := time.Now().Add(addTime)
 	setDeadlineErr := (*conn).SetReadDeadline(timeDeadline)
 	if setDeadlineErr != nil {
-		log.Println("[st][hb] err: ", setDeadlineErr)
+		log.Println("[st][Deadline] err: ", setDeadlineErr)
 	} else {
-		log.Printf("[st][hb] %v(%v) setReadDeadline: %v", jid, addTime, timeDeadline)
+		log.Printf("[st][Deadline] %v(%v) setReadDeadline: %v", jid, addTime, timeDeadline)
 	}
 }

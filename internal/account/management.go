@@ -1,8 +1,11 @@
 package account
 
 import (
+	"context"
 	"log"
 	"sync"
+	"time"
+	"xmpp/internal/pkg/amqp/rabbitmq"
 	"xmpp/internal/pkg/logger"
 	"xmpp/internal/pkg/memstore"
 	"xmpp/internal/server"
@@ -11,6 +14,7 @@ import (
 type AdminUser struct {
 	Name     string
 	Password string
+	Domain   string
 	Resource string
 	//Command  chan<- interface{}
 }
@@ -21,13 +25,22 @@ type Management struct {
 	SkipPassword bool
 	//Users     map[string]string
 	Online map[string]chan<- interface{}
-	Mutex  *sync.Mutex
-	Log    logger.Logger
+
+	ConnectionRequest map[string]chan bool
+
+	Mutex *sync.Mutex
+	Log   logger.Logger
 
 	// redis
-	UseRedis bool
-	Redis    memstore.Redis
+	UseDB  bool
+	DBType string
+	DB     memstore.Redis
 
+	// rabbitmq
+	UseMQ     bool
+	MQType    string
+	Publisher *rabbitmq.Client
+	//Consumer *rabbitmq.Client
 	ID string
 }
 
@@ -163,6 +176,7 @@ func (m Management) ConnectRoutine(bus <-chan server.Connect) {
 		m.saveOnline(key, val)
 
 		// TODO: Push Event
+		m.notifyConnectionStatus("device-connection-topic", key, "online")
 	}
 }
 
@@ -182,5 +196,70 @@ func (m Management) DisconnectRoutine(bus <-chan server.Disconnect) {
 		m.saveOffline(key)
 
 		// TODO: Push Event
+		m.notifyConnectionStatus("device-connection-topic", key, "offline")
 	}
+}
+
+func (m Management) ConnectionRequestRoutine(bus <-chan server.ConnectionRequest) {
+	log.Println("[am] new connection Request routine")
+	for {
+		message := <-bus
+		m.Mutex.Lock()
+		//m.log.Info(fmt.Sprintf("[am] %s connected", message.Jid))
+		log.Printf("[am] %v Connection Request\n", message.ToJid)
+		m.ConnectionRequest[message.ToLocalPart] = make(chan bool)
+		m.Mutex.Unlock()
+		go m.connectionRequestResultRoutine(message, 10)
+	}
+}
+
+func (m Management) connectionRequestResultRoutine(msg server.ConnectionRequest, timeoutSec time.Duration) {
+	m.Mutex.Lock()
+	defer m.Mutex.Unlock()
+	ch, ok := m.ConnectionRequest[msg.ToLocalPart]
+	if ok {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*timeoutSec)
+		defer cancel()
+
+		select {
+		case result := <-ch:
+			if result {
+				// success
+				log.Printf("[am] connectionRequestResultRoutine [%v]: success\n", msg.ToJid)
+				log.Println("[am] connectionRequestResultRoutine success: ", msg.ToLocalPart)
+				delete(m.ConnectionRequest, msg.ToLocalPart)
+				m.notifyConnectionRequest(msg.TopicId, msg.TaskId, msg.ToLocalPart, "")
+			} else {
+				// fail
+				log.Printf("[am] connectionRequestResultRoutine [%v]: fail busy(%v)\n", msg.ToJid, timeoutSec)
+				log.Println("[am] connectionRequestResultRoutine fail: ", msg.ToLocalPart)
+				delete(m.ConnectionRequest, msg.ToLocalPart)
+				reason := "busy"
+				m.notifyConnectionRequest(msg.TopicId, msg.TaskId, msg.ToLocalPart, reason)
+			}
+		case <-ctx.Done():
+			// timeout
+			log.Printf("[am] connectionRequestResultRoutine [%v]: fail timeout(%v)\n", msg.ToJid, timeoutSec)
+			log.Println("[am] connectionRequestResultRoutine timeout: ", msg.ToLocalPart)
+			delete(m.ConnectionRequest, msg.ToLocalPart)
+			reason := "timeout"
+			m.notifyConnectionRequest(msg.TopicId, msg.TaskId, msg.ToLocalPart, reason)
+		}
+
+	} else {
+		// error
+		log.Printf("[am] ConnectionRequestResultRoutine [%v]: fail no chan\n", msg.ToJid)
+	}
+}
+
+func (m Management) ConnectionRequestResult(jid, localPart string, result bool) {
+	log.Printf("[am] ConnectionRequestResult [%v][%v]: %v\n", jid, localPart, result)
+	m.Mutex.Lock()
+	ch, ok := m.ConnectionRequest[jid]
+	if ok {
+		ch <- result
+	} else {
+		log.Printf("[am] ConnectionRequestResult [%v]: fail no chan\n", jid)
+	}
+	m.Mutex.Unlock()
 }

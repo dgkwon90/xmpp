@@ -26,6 +26,8 @@ type AccountManager interface {
 	Authenticate(username, password string) (success bool, err error)
 	//CreateAccount(username, password string) (success bool, err error)
 	OnlineRoster(jid string) (online []string, err error)
+
+	ConnectionRequestResult(jid, localPart string, result bool)
 }
 
 // Logging interface for library messages
@@ -74,6 +76,8 @@ type Server struct {
 
 	// Deadline MaxCount
 	DeadlineMaxCount int
+
+	ConnectionRequestBus chan<- ConnectionRequest
 }
 
 // Message is a generic XMPP message to send to the To Jid
@@ -95,6 +99,16 @@ type Disconnect struct {
 	LocalPart string
 	Reason    string // Case1: The network was disconnected due to timeout due to client non-response.
 	// Case2: A network closed by the client.
+}
+
+// ConnectionRequest client
+type ConnectionRequest struct {
+	TaskId string
+	TopicId string
+	FromJid string
+	ToJid       string
+	ToLocalPart       string
+	Password string
 }
 
 // TCPAnswer sends connection through the TSLStateMachine

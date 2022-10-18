@@ -20,7 +20,7 @@ type DebugExtension struct {
 func (e *DebugExtension) Process(message interface{}, from *Client) {
 	data, _ := xml.Marshal(message)
 	//e.Log.Debug("Processing message: " + string(data))
-	log.Println("[ex] DebugExtension Processing message: " + string(data))
+	log.Println("[ex][DebugExtension] Processing message: " + string(data))
 }
 
 // NormalMessageExtension handles client messages
@@ -32,8 +32,9 @@ type NormalMessageExtension struct {
 func (e *NormalMessageExtension) Process(message interface{}, from *Client) {
 	parsed, ok := message.(*ClientMessage)
 	if ok {
-		log.Println("[ex] NormalMessageExtension Process")
+		log.Println("[ex][NormalMessageExtension] NormalMessageExtension Process")
 		e.MessageBus <- Message{To: parsed.To, Data: message}
+		log.Printf("[ex][NormalMessageExtension] to: %v, data: %v\n", parsed.To, message)
 	}
 }
 
@@ -65,6 +66,20 @@ func (e *RosterExtension) Process(message interface{}, from *Client) {
 		// 	msg := fmt.Sprintf("<iq from='%v' to='%v' id='c2s1' type='result'/>", parsed.To, parsed.From)
 		// 	from.messages <- msg
 
+		if parsed.ID == "cr001" && parsed.Type == "result" {
+			e.Accounts.ConnectionRequestResult(from.jid, from.localPart, true)
+		}
+
+		if string(parsed.Query) == "<error type='wait'><resource-constraint/></error>" ||
+			string(parsed.Query) == "<error type=\"wait\"><resource-constraint/></error>" {
+			log.Printf("[ex] Device Busy Try again : %v", from.jid)
+			e.Accounts.ConnectionRequestResult(from.jid, from.localPart, false)
+			//go func() {
+			//	time.Sleep(time.Second * 10)
+			//	from.messages <- "connreq"
+			//}()
+		}
+
 		if string(parsed.Query) == "<query xmlns='jabber:iq:roster'/>" {
 			// respond with roster
 			roster, _ := e.Accounts.OnlineRoster(from.jid)
@@ -80,24 +95,9 @@ func (e *RosterExtension) Process(message interface{}, from *Client) {
 
 		if parsed.Type == "set" && (string(parsed.Query) == "<session xmlns=\"urn:ietf:params:xml:ns:xmpp-session\"/>" ||
 			string(parsed.Query) == "<session xmlns='urn:ietf:params:xml:ns:xmpp-session'/>") {
-			//<iq xml:lang='en' to='00155d-stb-bsp123123126@xmpp-demo.kaonmedia.com/XMPPConn1' from='00155d-stb-bsp123123126@xmpp-demo.kaonmedia.com' type='result' id='_xmpp_session1'/>
 			ids := strings.Split(from.jid, "/")
 			msg := "<iq xml:lang='en' to='" + from.jid + "' from='" + ids[0] + "' type='result' id='_xmpp_session1'/>"
 			from.messages <- msg
-		}
-
-		if string(parsed.Query) == "<error type='wait'><resource-constraint/></error>" ||
-			string(parsed.Query) == "<error type=\"wait\"><resource-constraint/></error>" {
-			log.Printf("[ex] Device Busy Try again : %v", from.jid)
-			// go func() {
-			// 	if from.bRetry {
-			// 		return
-			// 	} else {
-			// 		from.bRetry = true
-			// 		time.Sleep(time.Second * 3)
-			// 		from.messages <- "connreq"
-			// 	}
-			// }()
 		}
 	} else {
 		log.Println("[ex] no query")
