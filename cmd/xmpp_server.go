@@ -33,6 +33,7 @@ func main() {
 	envPort := 5222
 	envLogLevel := logger.DebugLevel
 	envDomain := "localhost"
+	envResource := "XMPPConn1"
 
 	// TLS
 	envSkipTLS := true
@@ -45,19 +46,25 @@ func main() {
 	envDeadlineMaxCount := 3
 
 	// Account Info
-	envAccountManagementID := "xmpp-server.test" //+ generate.UUID()
+	envAccountManagementID := "xmpp-server.test"
+	// envAccountManagementID := "xmpp-server." + generate.UUID()
 
-	// Self Password
-	envSkipPassword := true
-	envSelfXmppClient := "selfXmppClient"
-	envSelfXmppClientPassword := "test1234"
-	envSelfXMppClientResource := "XMPPConn1"
+	// Admin Info
+	envAdminSkipPassword := true
+	envAdminXmppClient := "admin"
+	envAdminXmppClientPassword := "test1234"
+
+	// ServerClient
+	envServerClient := "xmpp-broker-client"
+	envConnectionRequestPassword := "test1234"
 
 	// DB Redis
 	envUseDB := true
 	envDBType := "redis"
+	//envRedisConfHost := "localhost"
 	envRedisConfHost := "192.168.56.1"
 	envRedisConfPort := 6379
+	//envRedisConfPassword := ""
 	envRedisConfPassword := "test001"
 	envRedisConfPool := 10000
 	envRedisConfTimeout := 0
@@ -80,8 +87,10 @@ func main() {
 	// l.Info("listening on localhost:" + fmt.Sprintf("%d", *portPtr))
 	log.Println("======== env values ========")
 	log.Printf("[ms] listening on localhost: %v\n", envPort)
+
 	log.Printf("[ms] debug level: %v\n", envLogLevel)
 	log.Printf("[ms] domain: %v\n", envDomain)
+	log.Printf("[ms] resource: %v\n", envResource)
 
 	log.Printf("[ms] skip tls: %v\n", envSkipTLS)
 	log.Printf("[ms] tls keyfile: %v\n", envTLSKeyFile)
@@ -92,10 +101,12 @@ func main() {
 	log.Printf("[ms] deadline MaxcCount: %v\n", envDeadlineMaxCount)
 
 	log.Printf("[ms] accounnt management id: %v\n", envAccountManagementID)
-	log.Printf("[ms] Skip Password: %v\n", envSkipPassword)
-	log.Printf("[ms] admin client: %v\n", envSelfXmppClient)
-	log.Printf("[ms] admin password: %v\n", envSelfXmppClientPassword)
-	log.Printf("[ms] admin resource: %v\n", envSelfXMppClientResource)
+	log.Printf("[ms] Skip Password: %v\n", envAdminSkipPassword)
+	log.Printf("[ms] admin client: %v\n", envAdminXmppClient)
+	log.Printf("[ms] admin password: %v\n", envAdminXmppClientPassword)
+
+	log.Printf("[ms] connetion request server client username: %v\n", envServerClient)
+	log.Printf("[ms] connetion request password: %v\n", envConnectionRequestPassword)
 
 	log.Printf("[ms] ues db: %v\n", envUseDB)
 	log.Printf("[ms] db type: %v\n", envDBType)
@@ -116,17 +127,16 @@ func main() {
 	log.Printf("[ms] rabbitmq consumer name: %v\n", envRabbitmqConsumerName)
 	log.Printf("[ms] rabbitmq consume exchange(topic): %v\n", envRabbitmqConsumeExchange)
 	log.Printf("[ms] rabbitmq consumer queuename: %v\n", envRabbitmqConsumerQueueName)
-
 	log.Println("==============================")
 	// portPtr := flag.Int("port", envPort, "port number to listen on")
 	// logLevelPtr := flag.Int("loggerLevel", envLogLevel, "set level logging")
 	// flag.Parse()
 
 	var adminUser = account.AdminUser{
-		Name:     envSelfXmppClient,
-		Domain:   envDomain,
-		Password: envSelfXmppClientPassword,
-		Resource: envSelfXMppClientResource,
+		Name: envAdminXmppClient,
+		//Domain:   envDomain,
+		Password: envAdminXmppClientPassword,
+		//Resource: envSelfXMppClientResource,
 	}
 
 	//var registered = make(map[string]string)
@@ -145,17 +155,17 @@ func main() {
 
 	var am = account.Management{
 		AdminUser:    adminUser,
-		SkipPassword: envSkipPassword,
+		SkipPassword: envAdminSkipPassword,
 		/*Users: registered,*/
-		Online:            activeUsers,
-		Log:               l,
-		Mutex:             &sync.Mutex{},
-		UseDB:             envUseDB,
-		DBType:            envDBType,
-		UseMQ:             envUseMQ,
-		MQType:            envMQType,
-		ID:                envAccountManagementID,
-		ConnectionRequest: make(map[string]chan bool),
+		Online:             activeUsers,
+		Log:                l,
+		Mutex:              &sync.Mutex{},
+		UseDB:              envUseDB,
+		DBType:             envDBType,
+		UseMQ:              envUseMQ,
+		MQType:             envMQType,
+		ID:                 envAccountManagementID,
+		ConnectionRequests: make(map[string]chan bool),
 	}
 
 	log.Printf("[ms] UseDB: %v\n", am.UseDB)
@@ -192,6 +202,10 @@ func main() {
 				envRabbitmqConsumerName,
 				envRabbitmqConsumerQueueName,
 				envRabbitmqUrl,
+				envServerClient,
+				envDomain,
+				envResource,
+				envConnectionRequestPassword,
 			)
 		}
 	}
@@ -250,6 +264,9 @@ func main() {
 
 		// Connection request
 		ConnectionRequestBus: connectionRequestBus,
+
+		ServerClient: envServerClient,
+		Resource:     envResource,
 	}
 
 	// Listen for incoming connections.
