@@ -8,6 +8,7 @@ package server
 
 import (
 	"crypto/tls"
+	"fmt"
 	"log"
 	"net"
 )
@@ -26,6 +27,8 @@ type AccountManager interface {
 	Authenticate(username, password string) (success bool, err error)
 	//CreateAccount(username, password string) (success bool, err error)
 	OnlineRoster(jid string) (online []string, err error)
+
+	SendConnectionRequest(message ConnectionRequest)
 
 	ConnectionRequestResult(jid, localPart string, result bool)
 }
@@ -78,6 +81,10 @@ type Server struct {
 	DeadlineMaxCount int
 
 	ConnectionRequestBus chan<- ConnectionRequest
+
+	ServerClient string
+
+	Resource string
 }
 
 // Message is a generic XMPP message to send to the To Jid
@@ -105,10 +112,28 @@ type Disconnect struct {
 type ConnectionRequest struct {
 	TaskId string
 	TopicId string
-	FromJid string
 	ToJid       string
+	FromJid string
 	ToLocalPart       string
 	Password string
+}
+
+func CreateConnectionRequest(taskId, topicId,  toJid , fromJid, toLocalPart, password string) ConnectionRequest {
+
+	if len(taskId) > 0 {
+		log.Println("[x] create connection request type is publisher server to client")
+	} else {
+		log.Println("[x] create connection request type is client to client")
+	}
+
+	return ConnectionRequest{
+		TaskId:      taskId,
+		TopicId:     topicId,
+		FromJid:     fromJid,
+		ToJid:       toJid,
+		ToLocalPart: toLocalPart,
+		Password:    password,
+	}
 }
 
 // TCPAnswer sends connection through the TSLStateMachine
@@ -133,7 +158,11 @@ func (s *Server) TCPAnswer(conn net.Conn) {
 
 	// create new client
 	client := &Client{
-		messages: make(chan interface{}),
+		messages:     make(chan interface{}),
+		jid:          fmt.Sprintf("%v@%v/%v", s.ServerClient, s.Domain, s.Resource),
+		localPart:    s.ServerClient,
+		domainPart:   s.Domain,
+		resourcePart: s.Resource,
 	}
 	// defer close client message chan
 	defer close(client.messages)

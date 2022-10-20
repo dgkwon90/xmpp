@@ -136,6 +136,14 @@ type ClientIQ struct { // info/query
 	Bind  bindBind    `xml:"bind"`
 	Query []byte      `xml:",innerxml"`
 	// RosterRequest - better detection of iq's
+	ConnectionRequest ConnectionRequestXML `xml:"connectionRequest"`
+}
+
+// ConnectionRequestXML element
+type ConnectionRequestXML struct {
+	XMLName  xml.Name `xml:"urn:broadband-forum-org:cwmp:xmppConnReq-1-0 connectionRequest"`
+	UserName string   `xml:"username,omitempty"`
+	Password string   `xml:"password,omitempty"`
 }
 
 type Ping struct {
@@ -151,19 +159,19 @@ type ClientError struct {
 	Text    string   `xml:"text"`
 }
 
-// Roster element
-type Roster struct {
-	XMLName xml.Name      `xml:"jabber:iq:roster query"`
-	Item    []RosterEntry `xml:"item"`
-}
-
-// RosterEntry element
-type RosterEntry struct {
-	Jid          string   `xml:"jid,attr"`
-	Subscription string   `xml:"subscription,attr"`
-	Name         string   `xml:"name,attr"`
-	Group        []string `xml:"group"`
-}
+//// Roster element
+//type Roster struct {
+//	XMLName xml.Name      `xml:"jabber:iq:roster query"`
+//	Item    []RosterEntry `xml:"item"`
+//}
+//
+//// RosterEntry element
+//type RosterEntry struct {
+//	Jid          string   `xml:"jid,attr"`
+//	Subscription string   `xml:"subscription,attr"`
+//	Name         string   `xml:"name,attr"`
+//	Group        []string `xml:"group"`
+//}
 
 // RosterRequest is used to request that the server update the user's roster.
 // See RFC 6121, section 2.3.

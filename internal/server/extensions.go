@@ -56,7 +56,8 @@ func (e *RosterExtension) Process(message interface{}, from *Client) {
 		log.Printf("[ex] Bind: %v\n", parsed.Bind)
 		log.Printf("[ex] ID: %v\n", parsed.ID)
 		log.Printf("[ex] XMLName: %v\n", parsed.XMLName)
-		log.Printf("[ex] query: %v\n", string(parsed.Query))
+		log.Printf("[ex] Query: %v\n", string(parsed.Query))
+		log.Printf("[ex] ConnectionRequest: %v\n", parsed.ConnectionRequest)
 
 		// // Receive ping from client. *reference XEP-0199: XMPP Ping
 		// //if parsed.Type == "get" && (string(parsed.Query) == "<ping xmlns=\"urn:xmpp:ping\"/>") {
@@ -65,8 +66,25 @@ func (e *RosterExtension) Process(message interface{}, from *Client) {
 		// 	// response pong message
 		// 	msg := fmt.Sprintf("<iq from='%v' to='%v' id='c2s1' type='result'/>", parsed.To, parsed.From)
 		// 	from.messages <- msg
+		if parsed.ID == "cr001" && parsed.Type == "get" {
+			//crMap := new(map[string]interface{})
+			//xmlErr := xml.Unmarshal(parsed.Query, crMap)
+			//if xmlErr != nil {
+			//	log.Println("[ex] query xml parsing err: ", xmlErr)
+			//} else {
+			//	log.Println("[ex] query xml: ", crMap)
+			//}
+			log.Printf("[ex] ConnectionRequest get")
+			log.Printf("[ex] ConnectionRequest.Username: %v\n", parsed.ConnectionRequest.UserName)
+			log.Printf("[ex] ConnectionRequest.Password: %v\n", parsed.ConnectionRequest.Password)
+			crMsg := CreateConnectionRequest("","", parsed.To, parsed.From, parsed.ConnectionRequest.UserName, parsed.ConnectionRequest.Password)
+			e.Accounts.SendConnectionRequest(crMsg)
+		}
 
 		if parsed.ID == "cr001" && parsed.Type == "result" {
+			log.Printf("[ex] ConnectionRequest")
+			log.Printf("[ex] ConnectionRequest from.jid: %v\n", from.jid)
+			log.Printf("[ex] ConnectionRequest from.localPart: %v\n", from.localPart)
 			e.Accounts.ConnectionRequestResult(from.jid, from.localPart, true)
 		}
 

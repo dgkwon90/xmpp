@@ -14,8 +14,8 @@ import (
 type AdminUser struct {
 	Name     string
 	Password string
-	Domain   string
-	Resource string
+	//Domain   string
+	//Resource string
 	//Command  chan<- interface{}
 }
 
@@ -26,7 +26,7 @@ type Management struct {
 	//Users     map[string]string
 	Online map[string]chan<- interface{}
 
-	ConnectionRequest map[string]chan bool
+	ConnectionRequests map[string]chan bool
 
 	Mutex *sync.Mutex
 	Log   logger.Logger
@@ -121,6 +121,22 @@ func (m Management) OnlineRoster(jid string) (online []string, err error) {
 	return
 }
 
+func (m Management) SendConnectionRequest(message server.ConnectionRequest) {
+	log.Println("[am] SendConnectionRequest ")
+	channel, ok := m.Online[message.ToJid]
+	if ok {
+		log.Printf("[am] SendConnectionRequest tojid: %v, fromjid: %v\n", message.ToJid, message.FromJid)
+		m.Mutex.Lock()
+		channel <- message
+		m.Mutex.Unlock()
+	} else {
+		log.Printf("[am] ConnectionRequests tojid:%v is null\n", message.ToJid)
+		// nok
+		// publish cr error
+		// publish offline
+	}
+}
+
 // PresenceRoutine new WIP func for presence messages
 func (m Management) PresenceRoutine(bus <-chan server.Message) {
 	log.Println("[am] new presence routine")
@@ -207,43 +223,69 @@ func (m Management) ConnectionRequestRoutine(bus <-chan server.ConnectionRequest
 		m.Mutex.Lock()
 		//m.log.Info(fmt.Sprintf("[am] %s connected", message.Jid))
 		log.Printf("[am] %v Connection Request\n", message.ToJid)
-		m.ConnectionRequest[message.ToLocalPart] = make(chan bool)
+		m.ConnectionRequests[message.ToJid] = make(chan bool, 1)
 		m.Mutex.Unlock()
 		go m.connectionRequestResultRoutine(message, 10)
 	}
 }
 
 func (m Management) connectionRequestResultRoutine(msg server.ConnectionRequest, timeoutSec time.Duration) {
-	m.Mutex.Lock()
-	defer m.Mutex.Unlock()
-	ch, ok := m.ConnectionRequest[msg.ToLocalPart]
-	if ok {
+	if _, ok := m.ConnectionRequests[msg.ToJid]; ok {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*timeoutSec)
 		defer cancel()
 
+		log.Printf("[am] wait connection reqeust of %v\n", msg.ToLocalPart)
 		select {
-		case result := <-ch:
+		case result := <- m.ConnectionRequests[msg.ToJid]:
 			if result {
 				// success
 				log.Printf("[am] connectionRequestResultRoutine [%v]: success\n", msg.ToJid)
 				log.Println("[am] connectionRequestResultRoutine success: ", msg.ToLocalPart)
-				delete(m.ConnectionRequest, msg.ToLocalPart)
-				m.notifyConnectionRequest(msg.TopicId, msg.TaskId, msg.ToLocalPart, "")
+
+				m.Mutex.Lock()
+				delete(m.ConnectionRequests, msg.ToJid)
+				m.Mutex.Unlock()
+
+				if len(msg.TaskId) > 0 {
+					// response server(rabbitmq)
+					m.notifyConnectionRequest(msg.TopicId, msg.TaskId, msg.ToLocalPart, "")
+				} else {
+					// response client(xmpp)
+					// TODO: client to xmpp error
+				}
 			} else {
 				// fail
 				log.Printf("[am] connectionRequestResultRoutine [%v]: fail busy(%v)\n", msg.ToJid, timeoutSec)
 				log.Println("[am] connectionRequestResultRoutine fail: ", msg.ToLocalPart)
-				delete(m.ConnectionRequest, msg.ToLocalPart)
+
+				m.Mutex.Lock()
+				delete(m.ConnectionRequests, msg.ToJid)
+				m.Mutex.Unlock()
+
 				reason := "busy"
-				m.notifyConnectionRequest(msg.TopicId, msg.TaskId, msg.ToLocalPart, reason)
+				if len(msg.TaskId) > 0 {
+					// response server(rabbitmq)
+					m.notifyConnectionRequest(msg.TopicId, msg.TaskId, msg.ToLocalPart, reason)
+				} else {
+					// response client(xmpp)
+					// TODO: client to xmpp error
+				}
 			}
 		case <-ctx.Done():
 			// timeout
 			log.Printf("[am] connectionRequestResultRoutine [%v]: fail timeout(%v)\n", msg.ToJid, timeoutSec)
 			log.Println("[am] connectionRequestResultRoutine timeout: ", msg.ToLocalPart)
-			delete(m.ConnectionRequest, msg.ToLocalPart)
+
+			m.Mutex.Lock()
+			delete(m.ConnectionRequests, msg.ToJid)
 			reason := "timeout"
-			m.notifyConnectionRequest(msg.TopicId, msg.TaskId, msg.ToLocalPart, reason)
+			if len(msg.TaskId) > 0 {
+				// response server(rabbitmq)
+				m.notifyConnectionRequest(msg.TopicId, msg.TaskId, msg.ToLocalPart, reason)
+			} else {
+				// response client(xmpp)
+				// TODO: client to xmpp error
+			}
 		}
 
 	} else {
@@ -254,12 +296,12 @@ func (m Management) connectionRequestResultRoutine(msg server.ConnectionRequest,
 
 func (m Management) ConnectionRequestResult(jid, localPart string, result bool) {
 	log.Printf("[am] ConnectionRequestResult [%v][%v]: %v\n", jid, localPart, result)
-	m.Mutex.Lock()
-	ch, ok := m.ConnectionRequest[jid]
-	if ok {
-		ch <- result
+	if _, ok := m.ConnectionRequests[jid];ok {
+		log.Printf("[am] ConnectionRequestResult is chan[%v]\n", jid)
+		m.Mutex.Lock()
+		m.ConnectionRequests[jid] <- result
+		m.Mutex.Unlock()
 	} else {
 		log.Printf("[am] ConnectionRequestResult [%v]: fail no chan\n", jid)
 	}
-	m.Mutex.Unlock()
 }

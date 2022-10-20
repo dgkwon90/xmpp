@@ -10,11 +10,11 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-func (m Management) ConsumeRoutine(consumeExchange, consumerName, consumerQueueName, url string) {
+func (m Management) ConsumeRoutine(consumeExchange, consumerName, consumerQueueName, url, envServerClient, domain, resource, password string) {
 	client := rabbitmq.NewClient(consumerName, consumerQueueName, url)
-	log.Println("consumeExchange: ", consumeExchange)
-	log.Println("consumerName: ", consumerName)
-	log.Println("consumerQueueName: ", consumerQueueName)
+	log.Println("[am][mq] consumeExchange: ", consumeExchange)
+	log.Println("[am][mq] consumerName: ", consumerName)
+	log.Println("[am][mq] consumerQueueName: ", consumerQueueName)
 	for {
 		if !client.IsReady() {
 			time.Sleep(rabbitmq.ResendDelay)
@@ -44,11 +44,11 @@ func (m Management) ConsumeRoutine(consumeExchange, consumerName, consumerQueueN
 			continue
 		}
 
-		log.Println("wait to send message from publisher")
+		log.Println("[am][mq] wait to send message from publisher")
 
 		for msg := range messages {
-
 			go func(inMsg amqp.Delivery) {
+				log.Printf("[am][mq] receive msg: %v\n", inMsg)
 				method := ""
 				if inMsg.Headers["method"] != nil {
 					method = inMsg.Headers["method"].(string)
@@ -56,6 +56,7 @@ func (m Management) ConsumeRoutine(consumeExchange, consumerName, consumerQueueN
 
 				switch method {
 				case "connreq":
+					log.Println("[am][mq] method is connreq")
 					endpointID := ""
 					if inMsg.Headers["endPointID"] != nil {
 						endpointID = inMsg.Headers["endPointID"].(string)
@@ -66,29 +67,21 @@ func (m Management) ConsumeRoutine(consumeExchange, consumerName, consumerQueueN
 					if inMsg.Headers["taskId"] != nil {
 						taskId = inMsg.Headers["taskId"].(string)
 					}
+					log.Printf("[am][mq] taskId: %v\n", taskId)
+
 					if inMsg.Headers["topicId"] != nil {
 						topicId = inMsg.Headers["topicId"].(string)
 					}
+					log.Printf("[am][mq] topicId: %v\n", topicId)
 
-					toJid := fmt.Sprintf("%v@%v/%v", endpointID, m.AdminUser.Domain, m.AdminUser.Resource)
-					fromJid := fmt.Sprintf("%v@%v/%v", m.AdminUser.Name, m.AdminUser.Domain, m.AdminUser.Resource)
-					pushMsg := server.ConnectionRequest{
-						TaskId:      taskId,
-						TopicId:     topicId,
-						FromJid:     fromJid,
-						ToJid:       toJid,
-						ToLocalPart: endpointID,
-						Password:    m.AdminUser.Password,
-					}
-					m.Mutex.Lock()
-					if channel, ok := m.Online[toJid]; ok {
-						channel <- pushMsg
-					} else {
-						// nok
-						// publish cr error
-						// publish offline
-					}
-					m.Mutex.Unlock()
+					toJid := fmt.Sprintf("%v@%v/%v", envServerClient, domain, resource)
+					fromJid := fmt.Sprintf("%v@%v/%v", endpointID, domain, resource)
+
+					log.Printf("[am][mq] toJid: %v\n", toJid)
+					log.Printf("[am][mq] fromJid: %v\n", fromJid)
+
+					crMsg := server.CreateConnectionRequest(taskId, topicId, fromJid, toJid, endpointID, password)
+					m.SendConnectionRequest(crMsg)
 				}
 				inMsg.Ack(true)
 			}(msg)

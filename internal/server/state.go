@@ -452,7 +452,8 @@ func (state *Normal) Process(c *Connection, client *Client, s *Server) (State, *
 					}
 				}
 
-				// excute extensions
+				// execute extensions
+				log.Println("[st][Normal] execute extensions")
 				for _, extension := range s.Extensions {
 					extension.Process(val, client)
 				}
@@ -487,8 +488,8 @@ func (state *Normal) Process(c *Connection, client *Client, s *Server) (State, *
 				err = c.SendRaw(msg)
 
 			case ConnectionRequest:
-				log.Println("[st][Normal] ConnectionRequest type")
-				subMsg := "<iq id='cr001' type='get' xml:lang='en' from='" + msg.FromJid + "' to='" + msg.ToJid + "'>"
+				log.Println("[st][Normal] ConnectionRequests type")
+				subMsg := "<iq xmlns='jabber:client' from='" + msg.FromJid + "' to='" + msg.ToJid + "' id='cr001' type='get' xml:lang='en'>"
 				subMsg = subMsg + "<connectionRequest xmlns='urn:broadband-forum-org:cwmp:xmppConnReq-1-0'>"
 				subMsg = subMsg + "<username>" + msg.ToLocalPart + "</username>"
 				subMsg = subMsg + "<password>" + msg.Password + "</password>"
